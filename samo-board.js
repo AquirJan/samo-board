@@ -1,5 +1,5 @@
 "use strict";
-
+import cloneDeep from './lodash.clonedeep.js'
 export default class samoBoard {
   #wrap;
   #ctx;
@@ -10,6 +10,10 @@ export default class samoBoard {
   #bgList = [];
   #draws = [];
   #drawType = 'pointer';
+  #pencilDownFn = undefined;
+  #pencilMoveFn = undefined;
+  #pencilUpFn = undefined;
+  #pencilOutFn = undefined;
   #svgCursors = {
     location: {
       path: 'M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12 ,2Z',
@@ -17,6 +21,10 @@ export default class samoBoard {
       y: 0,
       size: 1
     }
+  }
+  #hoverPoint = {
+    x: 0,
+    y: 0
   }
   #tmpDraw = {};
   #drawPrototype = {
@@ -79,6 +87,8 @@ export default class samoBoard {
     // this.#canvas.style.cssText = `display:grid;background-color: #fff;`
     this.#setCtx(this.#ctx, this.opts.ctxStyle)
     this.renderBoard()
+
+    this.setDrawType()
     return this;
   }
   getCanvas() {
@@ -102,6 +112,9 @@ export default class samoBoard {
       _style.push(`${key}:${_cStyleObj[key]}`)
     }
     return this.#canvas.style.cssText = _style.join(';');
+  }
+  static cloneDeep(params) {
+    return cloneDeep(params)
   }
   static mergeDeep(...objects) {
     const isObject = (obj) => obj && obj.constructor === Object;
@@ -208,68 +221,27 @@ export default class samoBoard {
     }
   }
   // 设置画图类型
-  setDrawType({type='pointer'}) {
+  setDrawType(type='pointer', options={}) {
     this.#drawType = type;
-    if (!['pointer', 'magnifier'].includes(this.drawType) ) {
-      document.documentElement.style.cursor = 'crosshair';
+    this.#canvas.removeEventListener('mousedown', this.#pencilDownFn, false);
+    this.#canvas.removeEventListener('mousedown', this.#pencilMoveFn, false);
+    this.#canvas.removeEventListener('mousedown', this.#pencilUpFn, false);
+    this.#canvas.removeEventListener('mousedown', this.#pencilOutFn, false);
+    if (this[`${this.#drawType}DownFn`]) {
+      this.#pencilDownFn = e => this[`${this.#drawType}DownFn`](e, options);
+      this.#canvas.addEventListener('mousedown', this.#pencilDownFn, false);
     }
-    if (this.pencilDownFn) {
-      this.#canvas.removeEventListener('mousedown', this.pencilDownFn, false);
-      this.pencilDownFn = null;
+    if (this[`${this.#drawType}MoveFn`]) {
+      this.#pencilMoveFn = e => this[`${this.#drawType}MoveFn`](e, options);
+      this.#canvas.addEventListener('mousemove', this.#pencilMoveFn, false);
     }
-    if (this.pencilMoveFn) {
-      this.#canvas.removeEventListener('mousemove', this.pencilMoveFn, false);
-      this.pencilMoveFn = null;
+    if (this[`${this.#drawType}UpFn`]) {
+      this.#pencilMoveFn = e => this[`${this.#drawType}UpFn`](e, options);
+      this.#canvas.addEventListener('mouseup', this.#pencilUpFn, false);
     }
-    if (this.pencilUpFn) {
-      this.#canvas.removeEventListener('mouseup', this.pencilUpFn, false);
-      // this.#canvas.removeEventListener('mouseout', this.pencilUpFn, false);
-      this.pencilUpFn = null;
-    }
-    if (this.pencilOutFn) {
-      this.#canvas.removeEventListener('mouseout', this.pencilOutFn, false);
-      this.pencilOutFn = null;
-    }
-    if (this.drawType !== 'pointer' && this.isObserver) {
-      return false;
-    }
-    
-    // 各类型自动绑定事件
-    if (this[`${this.drawType}DownFn`]) {
-      if (options.id) {
-        this.specifyDrawId = options.id;
-      }
-      delete options.id;
-      this.options['adjustDotStyle'] = this.mergeDeep(this.options.adjustDotStyle, options.adjustDotStyle || {});
-      this.options['pencilStyle'] = this.mergeDeep(this.options.pencilStyle, options.pencilStyle || {});
-      
-      if (this[`${this.drawType}DownFn`]) {
-        this.pencilDownFn = e => this[`${this.drawType}DownFn`](e, options);
-        this.#canvas.addEventListener('mousedown', this.pencilDownFn, false);
-      }
-      
-      if (this[`${this.drawType}MoveFn`]) {
-        this.pencilMoveFn = e => this[`${this.drawType}MoveFn`](e, options);
-        this.#canvas.addEventListener('mousemove', this.pencilMoveFn, false);  
-      }
-      
-      if (this[`${this.drawType}UpFn`]) {
-        this.pencilUpFn = e => this[`${this.drawType}UpFn`](e, options);
-        this.#canvas.addEventListener('mouseup', this.pencilUpFn, false);
-        // this.#canvas.addEventListener('mouseout', this.pencilUpFn, false);
-      }
-      
-      if (this[`${this.drawType}OutFn`]) {
-        this.pencilOutFn = e => this[`${this.drawType}OutFn`](e, options);
-        this.#canvas.addEventListener('mouseout', this.pencilOutFn, false);
-      }
-      
-      // 更改鼠标样式，暂时只做了brush和eraser两个类型的自定义
-      if (['brush', 'eraser'].includes(this.drawType)) {
-        this.initCursor();
-      } else {
-        this.cursorDraw = null;
-      }
+    if (this[`${this.#drawType}OutFn`]) {
+      this.#pencilOutFn = e => this[`${this.#drawType}OutFn`](e, options);
+      this.#canvas.addEventListener('mouseout', this.#pencilOutFn, false);
     }
   }
   #renderDraws() {
@@ -283,19 +255,35 @@ export default class samoBoard {
   renderCursor(cursorName) {
     return new Path2D(this.#svgCursors[cursorName].path)
   }
-  pencilDownFn(callback) {
-    if (callback){
-      callback()
+  setDrawsData(draws) {
+    this.#draws = draws
+  }
+  setCustomDrawType({type, downFn, moveFn, upFn, outFn}) {
+    this.#drawType = type;
+    this.#canvas.removeEventListener('mousedown', this.#pencilDownFn, false);
+    this.#canvas.removeEventListener('mousedown', this.#pencilMoveFn, false);
+    this.#canvas.removeEventListener('mousedown', this.#pencilUpFn, false);
+    this.#canvas.removeEventListener('mousedown', this.#pencilOutFn, false);
+    let _params = {
+      draws: cloneDeep(this.#draws),
+      drawPrototype: cloneDeep(this.#drawPrototype)
     }
-  }
-  pencilMoveFn() {
-
-  }
-  pencilUpFn() {
-
-  }
-  pencilOutFn() {
-
+    if (downFn) {
+      this.#pencilDownFn = (e) => downFn(e, _params)
+      this.#canvas.addEventListener('mousedown', this.#pencilDownFn, false);
+    }
+    if (moveFn) {
+      this.#pencilMoveFn = (e) => moveFn(e, _params)
+      this.#canvas.addEventListener('mousemove', this.#pencilMoveFn, false);
+    }
+    if (upFn) {
+      this.#pencilUpFn = (e) => upFn(e, _params)
+      this.#canvas.addEventListener('mouseup', this.#pencilUpFn, false);
+    }
+    if (outFn) {
+      this.#pencilOutFn = (e) => outFn(e, _params)
+      this.#canvas.addEventListener('mouseout', this.#pencilOutFn, false);
+    }
   }
   renderBoard() {
     this.#ctx.setTransform(1, 0, 0, 1, 0, 0);

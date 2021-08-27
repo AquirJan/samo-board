@@ -34,7 +34,46 @@
         const sbIns = new samoBoard({
             wrap: _samoBoardWrap
         })
-
+        let _hoverPoint = {
+            x: 0,
+            y: 0
+        }
+        let _draw = {}
+        let _leftPressing = false;
+        // 自定义画框类型
+        sbIns.setCustomDrawType({
+            type: 'jcrect',
+            downFn: (e, {draws, drawPrototype}) => {
+                console.log('down')
+                _hoverPoint = {
+                    x: e.offsetX,
+                    y: e.offsetY
+                }
+                _leftPressing = true;
+                // console.log(draws)
+                // console.log(e)
+            },
+            moveFn: (e, {draws, drawPrototype}) => {
+                if (_leftPressing) {
+                    console.log('move')
+                    console.log(_hoverPoint)
+                    _draw = samoBoard.deepClone(drawPrototype)
+                }
+            },
+            // outFn: (e) => {
+            //     console.log('out')
+            //     console.log(e)
+            // },
+            upFn: (e, {draws}) => {
+                _leftPressing = false;
+                console.log('up')
+                console.log(e)
+                let _draws = [...draws, ]
+                sbIns.setDrawsData()
+            },
+        })
+        
+        // sbIns
         // 手动指定加入某个dom
         // const sbIns = new samoBoard({
         //     autoAppend: false
