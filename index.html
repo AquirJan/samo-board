@@ -53,11 +53,11 @@
                 // console.log(draws)
                 // console.log(e)
             },
-            moveFn: (e, {draws, drawPrototype}) => {
+            moveFn: (e, {draws, drawPrototype, tmpDraw}) => {
                 if (_leftPressing) {
                     console.log('move')
                     console.log(_hoverPoint)
-                    _draw = samoBoard.deepClone(drawPrototype)
+                    _draw = drawPrototype
                 }
             },
             // outFn: (e) => {
@@ -67,8 +67,8 @@
             upFn: (e, {draws}) => {
                 _leftPressing = false;
                 console.log('up')
-                console.log(e)
-                let _draws = [...draws, ]
+                console.log(_draw)
+                let _draws = [...draws, _draw]
                 sbIns.setDrawsData()
             },
         })

@@ -244,6 +244,23 @@ export default class samoBoard {
       this.#canvas.addEventListener('mouseout', this.#pencilOutFn, false);
     }
   }
+  #renderDarw(ctx, obj) {
+    this.#setCtx(ctx, {
+      gco: obj.gco,
+      lineWidth: obj.lineWidth,
+      strokeStyle: obj.strokeStyle,
+      fillStyle: obj.fillStyle,
+    })
+    let _path2d = new Path2D();
+    
+    switch(obj.type) {
+      case "rect":
+        _path2d.rect(obj.x, obj.y, obj.width, obj.height);
+        ctx.storke()
+        ctx.fill()
+        break;
+    }
+  }
   #renderDraws() {
     // const _ctxStyle = this.constructor.mergeDeep(this.opts.ctxStyle, {
     //   strokeStyle: 'gray'
@@ -251,6 +268,9 @@ export default class samoBoard {
     // this.#setCtx(this.#ctx, _ctxStyle)
     this.#ctx.translate(100, 100);
     this.#ctx.stroke(this.renderCursor('location'))
+  }
+  #renderTmpDraw() {
+    this.#renderDarw(this.#ctx, this.#tmpDraw)
   }
   renderCursor(cursorName) {
     return new Path2D(this.#svgCursors[cursorName].path)
@@ -266,6 +286,7 @@ export default class samoBoard {
     this.#canvas.removeEventListener('mousedown', this.#pencilOutFn, false);
     let _params = {
       draws: cloneDeep(this.#draws),
+      tmpDraw: this.#tmpDraw,
       drawPrototype: cloneDeep(this.#drawPrototype)
     }
     if (downFn) {
@@ -292,6 +313,7 @@ export default class samoBoard {
     // 默认状态
     this.#ctx.globalCompositeOperation = 'source-over';
     this.#renderDraws()
+    this.#renderTmpDraw()
     window.requestAnimationFrame(() => this.renderBoard());
   }
 }
