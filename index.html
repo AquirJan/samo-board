@@ -10,6 +10,10 @@
             padding: 0;
             margin: 0;
         }
+        ul,
+        li{
+            list-style: none;
+        }
         .wrap {
             position: fixed;
             top: 0;
@@ -20,11 +24,67 @@
 
             /* grid-template-columns: 3fr 7fr; */
         }
+        .icom {
+            display: inline-grid;
+            width: 1em;
+            height: 1em;
+            stroke-width: 0;
+            stroke: currentColor;
+            fill: currentColor;
+            font-size: 1.2rem;
+        }
+        .addon-btn {
+            cursor: pointer;
+            display: inline-grid;
+            border:1px solid #333;
+            align-items: center;
+            justify-items: center;
+            padding: .3rem;
+            border-radius: 50%;
+            transition: all 300ms;
+        }
+        .addon-btn:hover {
+            color: #efefef;
+            background-color: #333;
+        }
+        .addon-list-wrap {
+            z-index: 10;
+            display: grid;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            align-items: center;
+            justify-items: center;
+            padding-bottom: .5rem;
+        }
+        .addon-list {
+            display: inline-grid;
+            grid-auto-flow: column;
+            gap: .5rem;
+        }
     </style>
 </head>
 <body>
     <div class="wrap">
-        <!-- <div>side bar</div> -->
+        <div class="addon-list-wrap">
+            <ul class="addon-list">
+                <li class="addon-list-item">
+                    <a class="addon-btn" id="exportDD">
+                        <svg class="icom icom-share" viewBox="0 0 32 32">
+                            <path d="M8 20c0 0 1.838-6 12-6v6l12-8-12-8v6c-8 0-12 4.99-12 10zM22 24h-18v-12h3.934c0.315-0.372 0.654-0.729 1.015-1.068 1.374-1.287 3.018-2.27 4.879-2.932h-13.827v20h26v-8.395l-4 2.667v1.728z"></path>
+                        </svg>
+                    </a>
+                </li>
+                <li class="addon-list-item">
+                    <a class="addon-btn" id="jcrect">
+                        <svg class="icom icom-leaf" viewBox="0 0 32 32">
+                            <path d="M31.604 4.203c-3.461-2.623-8.787-4.189-14.247-4.189-6.754 0-12.257 2.358-15.099 6.469-1.335 1.931-2.073 4.217-2.194 6.796-0.108 2.296 0.278 4.835 1.146 7.567 2.965-8.887 11.244-15.847 20.79-15.847 0 0-8.932 2.351-14.548 9.631-0.003 0.004-0.078 0.097-0.207 0.272-1.128 1.509-2.111 3.224-2.846 5.166-1.246 2.963-2.4 7.030-2.4 11.931h4c0 0-0.607-3.819 0.449-8.212 1.747 0.236 3.308 0.353 4.714 0.353 3.677 0 6.293-0.796 8.231-2.504 1.736-1.531 2.694-3.587 3.707-5.764 1.548-3.325 3.302-7.094 8.395-10.005 0.292-0.167 0.48-0.468 0.502-0.804s-0.126-0.659-0.394-0.862z"></path>
+                        </svg>
+                    </a>
+                </li>
+            </ul>
+        </div>
         <div id="samoBoardWrap" class="samo-board-wrap"></div>
     </div>
     <script type="module">
@@ -38,41 +98,116 @@
             x: 0,
             y: 0
         }
-        let _draw = {}
+        let _draw = undefined;
         let _leftPressing = false;
-        // 自定义画框类型
-        sbIns.setCustomDrawType({
-            type: 'jcrect',
-            downFn: (e, {draws, drawPrototype}) => {
-                console.log('down')
-                _hoverPoint = {
-                    x: e.offsetX,
-                    y: e.offsetY
-                }
-                _leftPressing = true;
-                // console.log(draws)
-                // console.log(e)
-            },
-            moveFn: (e, {draws, drawPrototype, tmpDraw}) => {
-                if (_leftPressing) {
-                    console.log('move')
-                    console.log(_hoverPoint)
-                    _draw = drawPrototype
-                }
-            },
-            // outFn: (e) => {
-            //     console.log('out')
-            //     console.log(e)
-            // },
-            upFn: (e, {draws}) => {
+
+        let oldDraws = [
+            {"x":246,"y":314,"text":"","selected":false,"lock":false,"width":140,"height":102,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"red","fillStyle":"translate","lineWidth":1},
+            // {"id":"27be-4e4a99","x":434,"y":243,"text":"","selected":false,"lock":false,"width":86,"height":71,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"green","fillStyle":"translate","lineWidth":1}
+        ]
+        sbIns.setDrawsData(oldDraws)
+        function setupJCRect() {
+            const upAndOutFn = function (e, {draws}) {
+                // console.log('up')
                 _leftPressing = false;
-                console.log('up')
-                console.log(_draw)
-                let _draws = [...draws, _draw]
-                sbIns.setDrawsData()
-            },
-        })
+                if (e.button === 0) {
+                    if (_draw) {
+                        if (_draw.width < 0) {
+                            _draw.x = _draw.x + _draw.width
+                            _draw.width = Math.abs(_draw.width)
+                        }
+                        if (_draw.height < 0) {
+                            _draw.y = _draw.y + _draw.height
+                            _draw.height = Math.abs(_draw.height)
+                        }
+                        if (_draw.width >= 10 || _draw.height >= 10) { // 限制最小尺寸
+                            _draw.strokeStyle = '#453'
+                            draws.push(samoBoard.cloneDeep(_draw))
+                            _draw = undefined;
+                            sbIns.setDrawsData(draws)
+                        }
+                    } else {
+                        // sbIns.selectDraw({
+                        //     // useStroke: true,
+                        //     single: true,
+                        //     pointX: _hoverPoint.x,
+                        //     pointY: _hoverPoint.y,
+                        // })
+                    }
+                } else if(e.button === 2) {
+                    if (sbIns.detectIsDBClick(e.timeStamp)) {
+                        sbIns.zoomReset();
+                    }
+                }
+                
+            }
+            sbIns.customRender = function({ctx, draws}) {
+                // console.log(new Date())
+                // console.log(ctx)
+                // console.log(_draw)
+                if (_draw) {
+                    let _path2d = new Path2D();
+                    ctx.strokeStyle = _draw.strokeStyle
+                    _path2d.rect(_draw.x, _draw.y, _draw.width, _draw.height);
+                    ctx.fill(_path2d)
+                    ctx.stroke(_path2d)
+                }
+                // draws.forEach(val => {
+                //     val['strokeStyle'] = val.selected ? 'red' : 'blue'
+                // })
+            }
+            // 自定义画框类型
+            sbIns.setCustomDrawType({
+                type: 'jcrect',
+                downFn: (e, {draws, drawPrototype}) => {
+                    // console.log('down')
+                    draws = []
+                    // draws[0].strokeStyle = 'yellow'
+                    // console.log(e)
+                    if (e.button === 0) {
+                        _hoverPoint = {
+                            x: e.offsetX,
+                            y: e.offsetY
+                        }
+                        // console.log(JSON.stringify(_hoverPoint))
+                        // console.log(JSON.stringify(_draw))
+                        _leftPressing = true;
+                    }
+                },
+                moveFn: (e, {draws, drawPrototype, tmpDraw}) => {
+                    if (_leftPressing) {
+                        // console.log('move')
+                        // console.log(_hoverPoint)
+                        // console.log(e)
+                        if (!_draw ) {
+                            _draw = drawPrototype()
+                            _draw.x = _hoverPoint.x
+                            _draw.y = _hoverPoint.y
+                            _draw.strokeStyle = 'blue'
+                        } else {
+                            const _width = e.offsetX - _hoverPoint.x
+                            const _height = e.offsetY - _hoverPoint.y
+                            // console.log(_width, _height)
+                            _draw.width = _width
+                            _draw.height = _height
+                        }
+                    } else {
+                        
+                    }
+                },
+                outFn: upAndOutFn,
+                upFn: upAndOutFn,
+            }) 
+        }
         
+        const exportDD = document.getElementById('exportDD')
+        exportDD.addEventListener('click', ()=>{
+            const _draws = sbIns.exportDrawsData()
+            console.log(JSON.stringify(_draws))
+        })
+        const jcrect = document.getElementById('jcrect')
+        jcrect.addEventListener('click', setupJCRect)
+        jcrect.click()
         // sbIns
         // 手动指定加入某个dom
         // const sbIns = new samoBoard({
