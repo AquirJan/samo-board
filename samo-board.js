@@ -71,7 +71,7 @@ export default class samoBoard {
         // }
       ],
       type: 'rect', // polygon, arc, arcto, text
-      drawType: 'rect', // 用户自定义
+      drawName: 'rect', // 用户自定义
       rotate: 0,
       translate: [],
       lineDash: [],
@@ -122,14 +122,19 @@ export default class samoBoard {
     const isObject = (obj) => obj && obj.constructor === Object;
     return objects.reduce((prev, obj) => {
       Object.keys(obj).forEach((key) => {
-        const pVal = prev[key];
-        const oVal = obj[key];
-        if (Array.isArray(pVal) && Array.isArray(oVal)) {
-          prev[key] = pVal.concat(...oVal);
-        } else if (isObject(pVal) && isObject(oVal)) {
-          prev[key] = this.mergeDeep(pVal, oVal);
+        const pVal = prev[key]; // 新值
+        const oVal = obj[key]; // 默认值
+        if (pVal !== undefined && oVal !== undefined) {
+          if (pVal.constructor === Array && oVal.constructor === Array) {
+            // prev[key] = pVal.concat(...oVal); // 正常情况是合并数组
+            prev[key] = oVal; // 根据业务需求修改成覆盖
+          } else if (pVal.constructor === Object && oVal.constructor === Object) {
+            prev[key] = this.mergeDeep(pVal, oVal);
+          } else {
+            prev[key] = oVal === undefined ? pVal : oVal;
+          }
         } else {
-          prev[key] = oVal;
+          prev[key] = oVal === undefined ? pVal : oVal
         }
       });
       return prev;
@@ -154,7 +159,7 @@ export default class samoBoard {
     }
     // this.#canvas.style.cssText = `display:grid;background-color: #fff;`
     console.log('init')
-    this.#setCtx(this.#ctx, this.opts.ctxStyle)
+    // this.#setCtx(this.#ctx, this.opts.ctxStyle)
     this.#canvas.oncontextmenu = e => {
       e.preventDefault();
     };
@@ -198,24 +203,20 @@ export default class samoBoard {
         break;
     }
   }
-  #setCtx(ctx, configs={}){
+  #setCtx(ctx, obj={}){
     if (!ctx) {
       return;
     }
-    const _configs = this.constructor.mergeDeep(this.opts.ctxStyle, configs)
-    // console.log('merge')
-    // console.log(_configs)
+    const _configs = this.constructor.mergeDeep(this.opts.ctxStyle, obj)
     for (let key in _configs) {
       if (key === 'gco') {
         ctx.globalCompositeOperation = _configs[key];
-      } else if(key === 'rotate') {
-        ctx.rotate(_configs[key] * Math.PI / 180)
       } else if(key==='translate') {
         ctx.translate(_configs[key][0], _configs[key][1]);
       } else if(key === 'lineDash') {
         // console.log(_configs[key])
         ctx.setLineDash(_configs[key])
-      } else {
+      } else if (!['rotate'].includes(key)) {
         ctx[key] = _configs[key];
       }
     }
@@ -422,26 +423,15 @@ export default class samoBoard {
     }
   }
   #renderDraw(ctx, obj) {
-    // console.log('renderDraw')
-    // console.log(obj.lineDash)
-    this.#setCtx(ctx, {
-      gco: obj.gco,
-      lineWidth: obj.lineWidth,
-      strokeStyle: obj.strokeStyle,
-      fillStyle: obj.fillStyle,
-      // lineDash: obj.lineDash,
-      rotate: obj.rotate
-    })
+    // console.log('render draw')
+    this.#setCtx(ctx, obj)
+    // console.log(obj.drawName)
     switch(obj.type) {
       case "rect":
         let _path2d = new Path2D();
         _path2d.rect(obj.x, obj.y, obj.width, obj.height);
         if (obj.rotate !== undefined) {
           const _center = this.#findOutCenter(obj)
-        //   console.log(_center)
-        //   ctx.arc(_center.x, _center.y, 1, 0, 2 * Math.PI);
-        //   ctx.stroke();
-        //   console.log(obj.rotate)
           ctx.translate(_center.x, _center.y)
           ctx.rotate(obj.rotate*Math.PI)
           ctx.translate(-_center.x, -_center.y)
@@ -449,43 +439,7 @@ export default class samoBoard {
         ctx.stroke(_path2d)
         ctx.fill(_path2d)
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        // ctx.fillRect(obj.x, obj.y, obj.width, obj.height)
-        // ctx.strokeRect(obj.x, obj.y, obj.width, obj.height)
         break;
-    }
-  }
-  #generatePeakRect() {
-    if (this.#peaks && this.#peaks.length) {
-      // let _svg_path = [];
-      let _brx = 0;
-      let _bry = 0;
-      let _x = 0;
-      let _y = 0;
-      this.#peaks.forEach((val,vindex) => {
-        switch(val.code) {
-          case "tl":
-            _x = val.x
-            _y = val.y
-            break;
-          case "br":
-            _brx = val.x
-            _bry = val.y
-            break;
-        }
-      })
-      // _svg_path.push('Z')
-      // _svg_path = _svg_path.join(' ')
-      this.#peakRect = {
-        type: 'rect',
-        x: _x,
-        y: _y,
-        strokeStyle: '#83c3fb',
-        lineWidth: 1,
-        lineDash: [5, 10],
-        width: _brx-_x,
-        height: _bry-_y,
-        rotate: 0,
-      }
     }
   }
   #generatePeaks(draws) {
@@ -515,6 +469,14 @@ export default class samoBoard {
           y: val.y + val.height,
         })
       }
+      if (val.ways && val.ways.length) {
+        val.ways.forEach(wal => {
+          _pointsList.push({
+            x: wal.x,
+            y: wal.y,
+          })
+        })
+      }
     })
     const _XList = _pointsList.map(val => val.x)
     const _YList = _pointsList.map(val => val.y)
@@ -522,13 +484,25 @@ export default class samoBoard {
     const _maxX = Math.max(..._XList) + this.#peakGap;
     const _minY = Math.min(..._YList) - this.#peakGap;
     const _maxY = Math.max(..._YList) + this.#peakGap;
+    this.#peakRect = {
+      type: 'rect',
+      drawName: 'peakRect',
+      x: _minX,
+      y: _minY,
+      strokeStyle: '#83c3fb',
+      lineWidth: 1,
+      lineDash: [5, 10],
+      width: _maxX-_minX,
+      height: _maxY-_minY,
+      rotate: draws.length === 1 ? draws[0].rotate : 0,
+    }
     this.#peaks = [
       {
         cursor: 'nwse-resize',
         code: 'tl',
         radius: 3,
-        x: _minX,
-        y: _minY
+        x: this.#peakRect.x,
+        y: this.#peakRect.y
       },
       {
         cursor: 'rotate',
@@ -536,22 +510,22 @@ export default class samoBoard {
         startAngle: Math.PI/2,
         endAngle: 2 * Math.PI,
         radius: 20,
-        x: _minX,
-        y: _minY
+        x: this.#peakRect.x,
+        y: this.#peakRect.y
       },
       {
         cursor: 'ns-resize',
         code: 'tm',
         radius: 3,
-        x: _minX+Math.floor((_maxX-_minX)/2),
-        y: _minY
+        x: this.#peakRect.x + Math.floor(this.#peakRect.width/2),
+        y: this.#peakRect.y
       },
       {
         cursor: 'nesw-resize',
         code: 'tr',
         radius: 3,
-        x: _maxX,
-        y: _minY
+        x: this.#peakRect.x + this.#peakRect.width,
+        y: this.#peakRect.y
       },
       {
         cursor: 'rotate',
@@ -559,22 +533,22 @@ export default class samoBoard {
         startAngle: Math.PI * 3,
         endAngle: 2.5 * Math.PI,
         radius: 20,
-        x: _maxX,
-        y: _minY
+        x: this.#peakRect.x+this.#peakRect.width,
+        y: this.#peakRect.y
       },
       {
         cursor: 'ew-resize',
         code: 'rm',
         radius: 3,
-        x: _maxX,
-        y: _minY+Math.floor((_maxY-_minY)/2),
+        x: this.#peakRect.x+this.#peakRect.width,
+        y: this.#peakRect.y+Math.floor(this.#peakRect.height/2),
       },
       {
         cursor: 'nwse-resize',
         code: 'br',
         radius: 3,
-        x: _maxX,
-        y: _maxY
+        x: this.#peakRect.x+this.#peakRect.width,
+        y: this.#peakRect.y+this.#peakRect.height
       },
       {
         cursor: 'rotate',
@@ -582,22 +556,22 @@ export default class samoBoard {
         startAngle: Math.PI * 3.5,
         endAngle: Math.PI * 5,
         radius: 20,
-        x: _maxX,
-        y: _maxY
+        x: this.#peakRect.x+this.#peakRect.width,
+        y: this.#peakRect.y+this.#peakRect.height
       },
       {
         cursor: 'ns-resize',
         code: 'bm',
         radius: 3,
-        x: _minX+Math.floor((_maxX-_minX)/2),
-        y: _maxY,
+        x: this.#peakRect.x+Math.floor(this.#peakRect.width/2),
+        y: this.#peakRect.y+this.#peakRect.height,
       },
       {
         cursor: 'nesw-resize',
         code: 'bl',
         radius: 3,
-        x: _minX,
-        y: _maxY
+        x: this.#peakRect.x,
+        y: this.#peakRect.y+this.#peakRect.height
       },
       {
         cursor: 'rotate',
@@ -605,18 +579,17 @@ export default class samoBoard {
         startAngle: Math.PI * 2,
         endAngle: Math.PI * 3.5,
         radius: 20,
-        x: _minX,
-        y: _maxY
+        x: this.#peakRect.x,
+        y: this.#peakRect.y+this.#peakRect.height
       },
       {
         cursor: 'ew-resize',
         code: 'lm',
         radius: 3,
-        x: _minX,
-        y: _minY+Math.floor((_maxY-_minY)/2),
+        x: this.#peakRect.x,
+        y: this.#peakRect.y+Math.floor(this.#peakRect.height/2),
       },
     ]
-    this.#generatePeakRect()
     return this.#peaks
   }
   #findOutCenter(draw) {
@@ -701,7 +674,7 @@ export default class samoBoard {
         _selectedDraws.forEach((val,vindex) => {
           let _rotate = this.#originSelectedDraws[vindex].rotate !== undefined ? this.#originSelectedDraws[vindex].rotate : 0
           val['rotate'] = _rotate + 0.002 * (offsetX - this.#hoverPoint.x);
-          this.#peakRect.rotate = _rotate + 0.002 * (offsetX - this.#hoverPoint.x);
+          this.#peakRect['rotate'] = val.rotate
         })
         
       }
@@ -997,25 +970,11 @@ export default class samoBoard {
     }
   }
   #renderPeaks(){
+    // console.log('render peaks')
     if (this.#peakRect) {
-      // console.log(this.#peakRect)
-      this.#setCtx(this.#ctx, {
-        strokeStyle: this.#peakRect.strokeStyle, // '#83c3fb',
-        lineWidth: this.#peakRect.lineWidth,
-        lineDash: this.#peakRect.lineDash
-      })
-      
-      let _rect = new Path2D()
-      _rect.rect(this.#peakRect.x, this.#peakRect.y, this.#peakRect.width, this.#peakRect.height)
-      if (this.#peakRect.rotate !== undefined) {
-        const _center = this.#findOutCenter(this.#peakRect)
-        this.#ctx.translate(_center.x, _center.y)
-        this.#ctx.rotate(this.#peakRect.rotate*Math.PI)
-        this.#ctx.translate(-_center.x, -_center.y)
-        this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
-      }
-      this.#ctx.stroke(_rect)
+      this.#renderDraw(this.#ctx, this.#peakRect)
     }
+
     if (this.#peaks && this.#peaks.length) {
       this.#peaks.forEach((val,vindex) => {
         if (val.code.match(/-rotate/gi)) {
@@ -1023,24 +982,39 @@ export default class samoBoard {
             strokeStyle: '#ff8787',
             lineWidth: 15
           })
+          if (this.#peakRect.rotate !== undefined) {
+            const _center = this.#findOutCenter(this.#peakRect)
+            this.#ctx.translate(_center.x, _center.y)
+            this.#ctx.rotate(this.#peakRect.rotate*Math.PI)
+            this.#ctx.translate(-_center.x, -_center.y)
+          }
           const _peak = new Path2D()
           _peak.arc(val.x, val.y, val.radius, val.startAngle, val.endAngle);
           this.#ctx.stroke(_peak)
+          this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
         } else {
           this.#setCtx(this.#ctx, {
             fillStyle: '#ff8787',
             strokeStyle: '#83c3fb',
             lineWidth: 1
           })
+          if (this.#peakRect.rotate !== undefined) {
+            const _center = this.#findOutCenter(this.#peakRect)
+            this.#ctx.translate(_center.x, _center.y)
+            this.#ctx.rotate(this.#peakRect.rotate*Math.PI)
+            this.#ctx.translate(-_center.x, -_center.y)
+          }
           const _peak = new Path2D()
           _peak.arc(val.x, val.y, val.radius, 0, 2 * Math.PI);
           this.#ctx.fill(_peak)
           this.#ctx.stroke(_peak)
+          this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
         }
       })
     }
   }
   renderBoard() {
+    // console.log('render board')
     if (!this.#renderTime) {
       this.#renderTime = new Date().getTime()
     }
@@ -1055,7 +1029,7 @@ export default class samoBoard {
     this.#renderCustomAction()
     this.#renderPeaks()
     this.#renderCursor()
-    // if ((new Date().getTime() - this.#renderTime) < 10 ) {
+    // if ((new Date().getTime() - this.#renderTime) < 100 ) {
       window.requestAnimationFrame(() => this.renderBoard());
     // }
   }
