@@ -1,5 +1,7 @@
 "use strict";
 import cloneDeep from './lodash.clonedeep.js'
+// x=(x1-x2)*Math.cos(Math.pi/180.0*旋转角度)-(y1-y2)*Math.sin(pi/180.0*旋转角度)+x2
+// y=(x1-x2)*Math.sin(Math.pi/180.0*旋转角度)+(y1-y2)*Math.cos(pi/180.0*旋转角度)+y2
 export default class samoBoard {
   customRender = undefined;
   #wheelFn = undefined;
@@ -29,6 +31,7 @@ export default class samoBoard {
   #pencilMoveFn = undefined;
   #pencilUpFn = undefined;
   #pencilOutFn = undefined;
+  #rotateStartPoint = undefined;
   #maxZoomSize=2;
   #minZoomSize=0.5;
   #zoomStep = 0.05;
@@ -247,51 +250,38 @@ export default class samoBoard {
       throw err
     }
   }  
-  selectDraw({useStroke=false, pointX=0, pointY=0, ctrlKey=false}) {
+  selectDraw({pointX=0, pointY=0, ctrlKey=false}) {
     let _focused = undefined;
     if (this.#draws && this.#draws.length) {
-      for (let i=(this.#draws.length-1);i>=0;i--) {
-        let val = this.#draws[i]
-        const _path = this.#drawToSvgPath(val)
-        let _flag = false;
-        if (useStroke) {
-          _flag = this.#ctx.isPointInStroke(_path, pointX, pointY)
-        } else {
-          _flag = this.#ctx.isPointInPath(_path, pointX, pointY)
-        }
-        if (_flag) {
-          _focused = i;
-          break;
-        }
-      }
-      console.log(`_focused: ${_focused}`)
+      const {drawIndex: _focused} = this.#detectOverSomething({pointX, pointY})
+      console.log(_focused)
       if (ctrlKey) {
         // 按着ctrl键默认多选
         if (_focused !== undefined) {
           this.#draws[_focused]['selected'] = !this.#draws[_focused].selected;
         }
         this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected))
-        this.#generatePeaks(this.#originSelectedDraws)
+        // this.#generatePeaks(this.#originSelectedDraws)
       } else {
         if (this.#peakRect) {
           let _path2d = new Path2D()
           _path2d.rect(this.#peakRect.x, this.#peakRect.y, this.#peakRect.width, this.#peakRect.height)
           let _flag = this.#ctx.isPointInPath(_path2d, pointX, pointY)
-          if (!_flag || !this.#draws[_focused].selected) {
+          if (!_flag || (this.#draws[_focused] && !this.#draws[_focused].selected)) {
             this.#draws.forEach(val => val.selected = false)
           }
           if (_focused !== undefined) {
             this.#draws[_focused]['selected'] = true;
           }
           this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected))
-          this.#generatePeaks(this.#originSelectedDraws)
+          // this.#generatePeaks(this.#originSelectedDraws)
         } else {
           this.#draws.forEach(val => val.selected = false)
           if (_focused !== undefined) {
             this.#draws[_focused]['selected'] = true;
           }
           this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected))
-          this.#generatePeaks(this.#originSelectedDraws)
+          // this.#generatePeaks(this.#originSelectedDraws)
         }
         
       }
@@ -424,21 +414,23 @@ export default class samoBoard {
   }
   #renderDraw(ctx, obj) {
     // console.log('render draw')
+    // ctx.restore()
     this.#setCtx(ctx, obj)
     // console.log(obj.drawName)
     switch(obj.type) {
       case "rect":
+        ctx.save()
         let _path2d = new Path2D();
         _path2d.rect(obj.x, obj.y, obj.width, obj.height);
         if (obj.rotate !== undefined) {
           const _center = this.#findOutCenter(obj)
           ctx.translate(_center.x, _center.y)
-          ctx.rotate(obj.rotate*Math.PI)
+          ctx.rotate(obj.rotate * Math.PI /180)
           ctx.translate(-_center.x, -_center.y)
         }
         ctx.stroke(_path2d)
         ctx.fill(_path2d)
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.restore()
         break;
     }
   }
@@ -457,16 +449,16 @@ export default class samoBoard {
       if (val.type === 'rect') {
         // console.log(val)
         _pointsList.push({
-          x: val.x + val.width,
+          x: (val.x + val.width),
           y: val.y,
         },
         {
-          x: val.x + val.width,
-          y: val.y + val.height,
+          x: (val.x + val.width),
+          y: (val.y + val.height),
         },
         {
           x: val.x,
-          y: val.y + val.height,
+          y: (val.y + val.height),
         })
       }
       if (val.ways && val.ways.length) {
@@ -491,12 +483,22 @@ export default class samoBoard {
       y: _minY,
       strokeStyle: '#83c3fb',
       lineWidth: 1,
-      lineDash: [5, 10],
-      width: _maxX-_minX,
-      height: _maxY-_minY,
+      lineDash: [8, 6],
+      width: (_maxX-_minX),
+      height: (_maxY-_minY),
       rotate: draws.length === 1 ? draws[0].rotate : 0,
     }
+    // console.log(this.#peakRect)
     this.#peaks = [
+      {
+        cursor: 'grabbing',
+        code: 'all-rotate',
+        startAngle: 0,
+        endAngle: 2 * Math.PI,
+        radius: 5,
+        x: this.#peakRect.x + (this.#peakRect.width/2),
+        y: this.#peakRect.y - 20
+      },
       {
         cursor: 'nwse-resize',
         code: 'tl',
@@ -504,22 +506,15 @@ export default class samoBoard {
         x: this.#peakRect.x,
         y: this.#peakRect.y
       },
-      {
-        cursor: 'rotate',
-        code: 'tl-rotate',
-        startAngle: Math.PI/2,
-        endAngle: 2 * Math.PI,
-        radius: 20,
-        x: this.#peakRect.x,
-        y: this.#peakRect.y
-      },
-      {
-        cursor: 'ns-resize',
-        code: 'tm',
-        radius: 3,
-        x: this.#peakRect.x + Math.floor(this.#peakRect.width/2),
-        y: this.#peakRect.y
-      },
+      // {
+      //   cursor: 'rotate',
+      //   code: 'tl-rotate',
+      //   startAngle: Math.PI/2,
+      //   endAngle: 2 * Math.PI,
+      //   radius: 20,
+      //   x: this.#peakRect.x,
+      //   y: this.#peakRect.y
+      // },
       {
         cursor: 'nesw-resize',
         code: 'tr',
@@ -527,22 +522,15 @@ export default class samoBoard {
         x: this.#peakRect.x + this.#peakRect.width,
         y: this.#peakRect.y
       },
-      {
-        cursor: 'rotate',
-        code: 'tr-rotate',
-        startAngle: Math.PI * 3,
-        endAngle: 2.5 * Math.PI,
-        radius: 20,
-        x: this.#peakRect.x+this.#peakRect.width,
-        y: this.#peakRect.y
-      },
-      {
-        cursor: 'ew-resize',
-        code: 'rm',
-        radius: 3,
-        x: this.#peakRect.x+this.#peakRect.width,
-        y: this.#peakRect.y+Math.floor(this.#peakRect.height/2),
-      },
+      // {
+      //   cursor: 'rotate',
+      //   code: 'tr-rotate',
+      //   startAngle: Math.PI * 3,
+      //   endAngle: 2.5 * Math.PI,
+      //   radius: 20,
+      //   x: this.#peakRect.x+this.#peakRect.width,
+      //   y: this.#peakRect.y
+      // },
       {
         cursor: 'nwse-resize',
         code: 'br',
@@ -550,22 +538,15 @@ export default class samoBoard {
         x: this.#peakRect.x+this.#peakRect.width,
         y: this.#peakRect.y+this.#peakRect.height
       },
-      {
-        cursor: 'rotate',
-        code: 'br-rotate',
-        startAngle: Math.PI * 3.5,
-        endAngle: Math.PI * 5,
-        radius: 20,
-        x: this.#peakRect.x+this.#peakRect.width,
-        y: this.#peakRect.y+this.#peakRect.height
-      },
-      {
-        cursor: 'ns-resize',
-        code: 'bm',
-        radius: 3,
-        x: this.#peakRect.x+Math.floor(this.#peakRect.width/2),
-        y: this.#peakRect.y+this.#peakRect.height,
-      },
+      // {
+      //   cursor: 'rotate',
+      //   code: 'br-rotate',
+      //   startAngle: Math.PI * 3.5,
+      //   endAngle: Math.PI * 5,
+      //   radius: 20,
+      //   x: this.#peakRect.x+this.#peakRect.width,
+      //   y: this.#peakRect.y+this.#peakRect.height
+      // },
       {
         cursor: 'nesw-resize',
         code: 'bl',
@@ -573,23 +554,54 @@ export default class samoBoard {
         x: this.#peakRect.x,
         y: this.#peakRect.y+this.#peakRect.height
       },
-      {
-        cursor: 'rotate',
-        code: 'bl-rotate',
-        startAngle: Math.PI * 2,
-        endAngle: Math.PI * 3.5,
-        radius: 20,
-        x: this.#peakRect.x,
-        y: this.#peakRect.y+this.#peakRect.height
-      },
-      {
-        cursor: 'ew-resize',
-        code: 'lm',
-        radius: 3,
-        x: this.#peakRect.x,
-        y: this.#peakRect.y+Math.floor(this.#peakRect.height/2),
-      },
+      // {
+      //   cursor: 'rotate',
+      //   code: 'bl-rotate',
+      //   startAngle: Math.PI * 2,
+      //   endAngle: Math.PI * 3.5,
+      //   radius: 20,
+      //   x: this.#peakRect.x,
+      //   y: this.#peakRect.y+this.#peakRect.height
+      // }
     ]
+    if (draws.length === 1) {
+      if (this.#peakRect.width >= 20) {
+        this.#peaks = this.#peaks.concat([
+          {
+            cursor: 'ew-resize',
+            code: 'rm',
+            radius: 3,
+            x: this.#peakRect.x+this.#peakRect.width,
+            y: this.#peakRect.y+Math.floor(this.#peakRect.height/2),
+          },
+          {
+            cursor: 'ew-resize',
+            code: 'lm',
+            radius: 3,
+            x: this.#peakRect.x,
+            y: this.#peakRect.y+Math.floor(this.#peakRect.height/2),
+          },
+        ])
+      }
+      if (this.#peakRect.height >= 20) {
+        this.#peaks = this.#peaks.concat([
+          {
+            cursor: 'ns-resize',
+            code: 'tm',
+            radius: 3,
+            x: this.#peakRect.x + Math.floor(this.#peakRect.width/2),
+            y: this.#peakRect.y
+          },
+          {
+            cursor: 'ns-resize',
+            code: 'bm',
+            radius: 3,
+            x: this.#peakRect.x+Math.floor(this.#peakRect.width/2),
+            y: this.#peakRect.y+this.#peakRect.height,
+          }
+        ])
+      }
+    }
     return this.#peaks
   }
   #findOutCenter(draw) {
@@ -664,19 +676,25 @@ export default class samoBoard {
     if (offsetX === undefined || offsetY === undefined || offsetX.constructor !== Number || offsetY.constructor !== Number) {
       return false;
     }
-    let _selectedDraws = this.#draws.filter(val => val.selected)
+    let _selectedDraws = this.#draws.filter(val => val.selected === true)
     if (this.#currentPeak) {
-      const _ds = {
-        width: (offsetX - this.#hoverPoint.x) / this.#zoomSize,
-        height: (offsetY - this.#hoverPoint.y) / this.#zoomSize
+      const _ds_origin = {
+        x: (offsetX - this.#hoverPoint.x),
+        y: (offsetY - this.#hoverPoint.y)
       }
+      const _ds = {
+        width: _ds_origin.x / this.#zoomSize,
+        height: _ds_origin.y / this.#zoomSize
+      }
+      // console.log(`x: ${_ds_origin.x}, y: ${_ds_origin.y}`)
       if (this.#currentPeak.code.match(/-rotate/gi)) {
+        // const _center = this.#findOutCenter(this.#peakRect)
         _selectedDraws.forEach((val,vindex) => {
           let _rotate = this.#originSelectedDraws[vindex].rotate !== undefined ? this.#originSelectedDraws[vindex].rotate : 0
-          val['rotate'] = _rotate + 0.002 * (offsetX - this.#hoverPoint.x);
-          this.#peakRect['rotate'] = val.rotate
+          val['rotate'] = _rotate + 45;
+        //   // this.#peakRect['rotate'] = val.rotate
+          console.log(val.rotate)
         })
-        
       }
       switch(this.#currentPeak.code) {
         case 'bm':
@@ -686,12 +704,6 @@ export default class samoBoard {
           break;
         case 'rm':
           _selectedDraws.forEach((val,vindex) => {
-            val['width'] = this.#originSelectedDraws[vindex].width + _ds.width;
-          })
-          break;
-        case 'br':
-          _selectedDraws.forEach((val,vindex) => {
-            val['height'] = this.#originSelectedDraws[vindex].height + _ds.height;
             val['width'] = this.#originSelectedDraws[vindex].width + _ds.width;
           })
           break;
@@ -707,27 +719,69 @@ export default class samoBoard {
             val['width'] = this.#originSelectedDraws[vindex].width - _ds.width;
           })
           break;
+        case 'br':
+          if (_selectedDraws.length > 1) {
+            let _delta = (_ds.height + _ds.width) / 2
+            _selectedDraws.forEach((val,vindex) => {
+              val['height'] = this.#originSelectedDraws[vindex].height + _delta;
+              val['width'] = this.#originSelectedDraws[vindex].width + _delta;
+            })
+          } else {
+            _selectedDraws.forEach((val,vindex) => {
+              val['height'] = this.#originSelectedDraws[vindex].height + _ds.height;
+              val['width'] = this.#originSelectedDraws[vindex].width + _ds.width;
+            })
+          }
+          break;
         case 'tl':
-          _selectedDraws.forEach((val,vindex) => {
-            val['x'] = this.#originSelectedDraws[vindex].x + _ds.width;
-            val['width'] = this.#originSelectedDraws[vindex].width - _ds.width;
-            val['height'] = this.#originSelectedDraws[vindex].height - _ds.height;
-            val['y'] = this.#originSelectedDraws[vindex].y + _ds.height;
-          })
+          if (_selectedDraws.length > 1) {
+            let _delta = (_ds.height + _ds.width) / 2
+            _selectedDraws.forEach((val,vindex) => {
+              val['x'] = this.#originSelectedDraws[vindex].x + _delta;
+              val['width'] = this.#originSelectedDraws[vindex].width - _delta;
+              val['height'] = this.#originSelectedDraws[vindex].height - _delta;
+              val['y'] = this.#originSelectedDraws[vindex].y + _delta;
+            })
+          } else {
+            _selectedDraws.forEach((val,vindex) => {
+              val['x'] = this.#originSelectedDraws[vindex].x + _ds.width;
+              val['width'] = this.#originSelectedDraws[vindex].width - _ds.width;
+              val['height'] = this.#originSelectedDraws[vindex].height - _ds.height;
+              val['y'] = this.#originSelectedDraws[vindex].y + _ds.height;
+            })
+          }
           break;
         case 'tr':
-          _selectedDraws.forEach((val,vindex) => {
-            val['width'] = this.#originSelectedDraws[vindex].width + _ds.width;
-            val['height'] = this.#originSelectedDraws[vindex].height - _ds.height;
-            val['y'] = this.#originSelectedDraws[vindex].y + _ds.height;
-          })
+          if (_selectedDraws.length > 1) {
+            let _delta = (_ds.height + _ds.width) / 2
+            _selectedDraws.forEach((val,vindex) => {
+              val['width'] = this.#originSelectedDraws[vindex].width + _delta;
+              val['height'] = this.#originSelectedDraws[vindex].height - _delta;
+              val['y'] = this.#originSelectedDraws[vindex].y + _delta;
+            })
+          } else {
+            _selectedDraws.forEach((val,vindex) => {
+              val['width'] = this.#originSelectedDraws[vindex].width + _ds.width;
+              val['height'] = this.#originSelectedDraws[vindex].height - _ds.height;
+              val['y'] = this.#originSelectedDraws[vindex].y + _ds.height;
+            })
+          }
           break;
         case 'bl':
-          _selectedDraws.forEach((val,vindex) => {
-            val['width'] = this.#originSelectedDraws[vindex].width - _ds.width;
-            val['height'] = this.#originSelectedDraws[vindex].height + _ds.height;
-            val['x'] = this.#originSelectedDraws[vindex].x + _ds.width;
-          })
+          if (_selectedDraws.length > 1) {
+            let _delta = (_ds.height + _ds.width) / 2
+            _selectedDraws.forEach((val,vindex) => {
+              val['width'] = this.#originSelectedDraws[vindex].width - _delta;
+              val['height'] = this.#originSelectedDraws[vindex].height + _delta;
+              val['x'] = this.#originSelectedDraws[vindex].x + _delta;
+            })
+          } else {
+            _selectedDraws.forEach((val,vindex) => {
+              val['width'] = this.#originSelectedDraws[vindex].width - _ds.width;
+              val['height'] = this.#originSelectedDraws[vindex].height + _ds.height;
+              val['x'] = this.#originSelectedDraws[vindex].x + _ds.width;
+            })
+          }
           break;
         case 'pp':
           if (this.tinkerUp.wayIndex !== undefined && this.tinkerUp.wayIndex !== null && this.tinkerUp.wayIndex.constructor === Number) {
@@ -746,7 +800,7 @@ export default class samoBoard {
         val['y'] = this.#originSelectedDraws[vindex].y + (offsetY - this.#hoverPoint.y) / this.#zoomSize;
       })
     }
-    this.#generatePeaks(_selectedDraws)
+    // this.#this.#ctx.aks(_selectedDraws)
   }
   pointerDownFn(e) {
     if (e.button === 0) {
@@ -758,7 +812,6 @@ export default class samoBoard {
         y: e.offsetY,
       }
       if (!this.#spacebarPressed) {
-        
         const {peak, peakRect, cursor, draw } = this.#detectOverSomething({pointX: this.#hoverPoint.x, pointY: this.#hoverPoint.y})
         if (peak) {
           this.#currentPeak = peak;
@@ -803,7 +856,7 @@ export default class samoBoard {
           this.#revisionDraws()
           this.#originSelectedDraws = this.constructor.cloneDeep(_selectedDraws)
         }
-        this.#generatePeaks(this.#originSelectedDraws)
+        // this.#this.#ctx.aks(this.#originSelectedDraws)
       }
       this.#lBtnPressing = false;
       this.#dragOffsetOrigin = this.constructor.cloneDeep(this.#dragOffset)
@@ -836,7 +889,7 @@ export default class samoBoard {
     console.log('set draws data')
     this.#draws = this.constructor.cloneDeep(draws)
     this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val=>val.selected))
-    this.#generatePeaks(this.#draws.filter(val=>val.selected));
+    // this.#this.#ctx.aks(this.#draws.filter(val=>val.selected));
   }
   setCustomDrawType({type, downFn, moveFn, upFn, outFn}) {
     this.#drawType = type;
@@ -867,69 +920,80 @@ export default class samoBoard {
       this.#canvas.addEventListener('mouseout', this.#pencilOutFn, false);
     }
   }
-  #modifyPeak({pointX, pointY}) {
-    if (pointX === undefined || pointY === undefined || pointX.constructor !== Number || pointY.constructor !== Number) {
-      return false;
-    }
-
-  }
   #detectOverSomething({pointX, pointY}) {
     if (pointX === undefined || pointY === undefined || pointX.constructor !== Number || pointY.constructor !== Number) {
       return {};
     }
+    
     let _cursor = 'default';
     let _peak = undefined;
+    let _drawIndex = undefined;
     let _peakRect = undefined;
     let _draw = undefined;
-    if (_cursor === 'default' && this.#peaks && this.#peaks.length) {
-      for (let i=(this.#peaks.length-1);i>=0;i--) {
-        let val = this.#peaks[i]
-        const _path = new Path2D()
-        let _flag = false;
-        if (val.code.match(/-rotate/gi)) {
-          this.#setCtx(this.#ctx, {
-            lineWidth: 15
-          })
-          _path.arc(val.x, val.y, val.radius, val.startAngle, val.endAngle);
-          _flag = this.#ctx.isPointInStroke(_path, pointX, pointY)
-        } else {
+    // console.log(this.#peakRect)
+    if (_cursor === 'default' && this.#peakRect) {
+      this.#ctx.save()
+      if (this.#peakRect.rotate !== undefined) {
+        const _center = this.#findOutCenter(this.#peakRect)
+        this.#ctx.translate(_center.x, _center.y)
+        this.#ctx.rotate(this.#peakRect.rotate * Math.PI /180)
+        this.#ctx.translate(-_center.x, -_center.y)
+      }
+      if (this.#peaks && this.#peaks.length) {
+        for (let i=(this.#peaks.length-1);i>=0;i--) {
+          let val = this.#peaks[i]
+          const _path = new Path2D()
+          let _flag = false;
           this.#setCtx(this.#ctx, {
             lineWidth: 1
           })
           _path.arc(val.x, val.y, val.radius, 0, 2 * Math.PI);
           _flag = this.#ctx.isPointInPath(_path, pointX, pointY)
+          if (_flag) {
+            _cursor = val.cursor
+            _peak = val;
+            this.#ctx.restore()
+            break;
+          }
         }
+      }
+      if (_cursor === 'default') {
+        const _path2d = new Path2D();
+        _path2d.rect(this.#peakRect.x, this.#peakRect.y, this.#peakRect.width, this.#peakRect.height)
+        let _flag = this.#ctx.isPointInPath(_path2d, pointX, pointY)
         if (_flag) {
-          _cursor = val.cursor
-          _peak = val;
-          break;
+          _peakRect = this.#peakRect
+          _cursor = 'move'
+          this.#ctx.restore()
         }
       }
     }
-    if (_cursor === 'default' && this.#peakRect) {
-      const _path2d = new Path2D();
-      _path2d.rect(this.#peakRect.x, this.#peakRect.y, this.#peakRect.width, this.#peakRect.height)
-      let _flag = this.#ctx.isPointInPath(_path2d, pointX, pointY)
-      if (_flag) {
-        _peakRect = this.#peakRect
-        _cursor = 'move'
-      }
-    }
+    
     if (_cursor === 'default' && this.#draws && this.#draws.length) {
+      // console.log('draws')
       for (let i=(this.#draws.length-1);i>=0;i--) {
         let val = this.#draws[i]
+        if (val.rotate !== undefined) {
+          this.#ctx.save()
+          const _center = this.#findOutCenter(val)
+          this.#ctx.translate(_center.x, _center.y)
+          this.#ctx.rotate(val.rotate * Math.PI /180)
+          this.#ctx.translate(-_center.x, -_center.y)
+        }
         const _path = this.#drawToSvgPath(val)
-        let _flag = this.#ctx.isPointInPath(_path, pointX, pointY)
-        // let _flag = this.#ctx.isPointInStroke(_path, pointX, pointY)
+        let _flag = (!val.fillStyle || val.fillStyle === 'transparent') ? this.#ctx.isPointInStroke(_path, pointX, pointY) : this.#ctx.isPointInPath(_path, pointX, pointY)
         if (_flag) {
           _cursor = 'move'
+          _drawIndex = i;
           _draw = val;
+          this.#ctx.restore()
           break;
         }
       }
     }
     document.documentElement.style.cursor = _cursor
-    const _returnObj = {peak: _peak, cursor: _cursor, draw: _draw, peakReck: _peakRect }
+    const _returnObj = {peak: _peak, cursor: _cursor, draw: _draw, peakReck: _peakRect, drawIndex: _drawIndex }
+    
     return _returnObj
   }
   #renderDraws() {
@@ -971,45 +1035,32 @@ export default class samoBoard {
   }
   #renderPeaks(){
     // console.log('render peaks')
+    this.#generatePeaks(this.#draws.filter(val => val.selected))
     if (this.#peakRect) {
       this.#renderDraw(this.#ctx, this.#peakRect)
     }
 
     if (this.#peaks && this.#peaks.length) {
       this.#peaks.forEach((val,vindex) => {
-        if (val.code.match(/-rotate/gi)) {
-          this.#setCtx(this.#ctx, {
-            strokeStyle: '#ff8787',
-            lineWidth: 15
-          })
-          if (this.#peakRect.rotate !== undefined) {
-            const _center = this.#findOutCenter(this.#peakRect)
-            this.#ctx.translate(_center.x, _center.y)
-            this.#ctx.rotate(this.#peakRect.rotate*Math.PI)
-            this.#ctx.translate(-_center.x, -_center.y)
-          }
-          const _peak = new Path2D()
-          _peak.arc(val.x, val.y, val.radius, val.startAngle, val.endAngle);
-          this.#ctx.stroke(_peak)
-          this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
-        } else {
-          this.#setCtx(this.#ctx, {
-            fillStyle: '#ff8787',
-            strokeStyle: '#83c3fb',
-            lineWidth: 1
-          })
-          if (this.#peakRect.rotate !== undefined) {
-            const _center = this.#findOutCenter(this.#peakRect)
-            this.#ctx.translate(_center.x, _center.y)
-            this.#ctx.rotate(this.#peakRect.rotate*Math.PI)
-            this.#ctx.translate(-_center.x, -_center.y)
-          }
-          const _peak = new Path2D()
-          _peak.arc(val.x, val.y, val.radius, 0, 2 * Math.PI);
-          this.#ctx.fill(_peak)
-          this.#ctx.stroke(_peak)
-          this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
+        let _is_rotate = val.code.match(/-rotate/gi)
+        this.#ctx.save()
+        this.#setCtx(this.#ctx, {
+          fillStyle: _is_rotate ? '#fff' : '#ff8787',
+          strokeStyle: _is_rotate ? '#333' : '#83c3fb',
+          lineWidth: 1
+        })
+        const _peak = new Path2D()
+        _peak.arc(val.x, val.y, val.radius, (_is_rotate ? val.startAngle : 0), (_is_rotate ? val.endAngle : 2 * Math.PI) );
+        
+        if (this.#peakRect.rotate !== undefined) {
+          const _center = this.#findOutCenter(this.#peakRect)
+          this.#ctx.translate(_center.x, _center.y)
+          this.#ctx.rotate(this.#peakRect.rotate * Math.PI /180)
+          this.#ctx.translate(-_center.x, -_center.y)
         }
+        this.#ctx.fill(_peak)
+        this.#ctx.stroke(_peak)
+        this.#ctx.restore()
       })
     }
   }
@@ -1019,17 +1070,22 @@ export default class samoBoard {
       this.#renderTime = new Date().getTime()
     }
     this.#ctx.clearRect(-this.#wrap.clientWidth, -this.#wrap.clientHeight, this.#wrap.clientWidth*3, this.#wrap.clientHeight*3)
-    this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.#ctx.resetTransform()
     this.#ctx.scale(this.#zoomSize, this.#zoomSize);
     this.#ctx.translate(this.#dragOffset.x / this.#zoomSize, this.#dragOffset.y / this.#zoomSize);
     // 默认状态
-    this.#ctx.globalCompositeOperation = 'source-over';
+    // this.#ctx.globalCompositeOperation = 'source-over';
+    this.#setCtx(this.#ctx)
+    // this.#ctx.save()
     this.#renderDraws()
-    this.#renderTmpDraw()
-    this.#renderCustomAction()
+    // this.#renderTmpDraw()
+    // this.#renderCustomAction()
+    // this.#ctx.restore()
     this.#renderPeaks()
-    this.#renderCursor()
-    // if ((new Date().getTime() - this.#renderTime) < 100 ) {
+    // this.#renderCursor()
+    
+    // if ((new Date().getTime() - this.#renderTime) < 10 ) {
       window.requestAnimationFrame(() => this.renderBoard());
     // }
   }
