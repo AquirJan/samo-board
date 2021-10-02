@@ -106,6 +106,9 @@
             // {"x":146,"y":114,"text":"","selected":true,"lock":false,"width":140,"height":102,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"blue","fillStyle":"transparent","lineWidth":1},
             {"id":"27be-4e4a99","x":274,"y":383,"text":"","selected":false,"lock":false,"width":86,"height":71,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"green","fillStyle":"blue","lineWidth":1},
         ]
+        sbIns.setBackground({
+            src: './small.png'
+        })
         sbIns.setDrawsData(oldDraws)
         function setupJCRect() {
             const upAndOutFn = function (e, {draws}) {
@@ -208,6 +211,7 @@
         })
         const jcrect = document.getElementById('jcrect')
         jcrect.addEventListener('click', setupJCRect)
+        
         // jcrect.click()
         // sbIns
         // 手动指定加入某个dom
