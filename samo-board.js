@@ -13,6 +13,7 @@ export default class samoBoard {
   #zoomSize = 1;
   #oldZoomSize = 1;
   #bgList = [];
+  #stageDegree = 0;
   #peakGap = 5;
   #peaks = [];
   #peakRect = undefined;
@@ -22,10 +23,20 @@ export default class samoBoard {
   #currentCursor = undefined;
   #spacebarPressed = false;
   #clickTimeLogs=[];
+  #intervalHandler = undefined;
+  #resizing = false;
   #draws = [];
+  #background = {
+    degree: 0,
+    width: 0,
+    height: 0,
+    centerX: 0,
+    centerY: 0,
+    viewHeight:0,
+    viewWidth: 0
+  };
   #originSelectedDraws=undefined;
   #currentPeak = undefined;
-  #currentCenter = undefined;
   #drawType = 'pointer';
   #pencilDownFn = undefined;
   #pencilMoveFn = undefined;
@@ -35,6 +46,7 @@ export default class samoBoard {
   #maxZoomSize=2;
   #minZoomSize=0.5;
   #zoomStep = 0.05;
+  #windowResizeFn=undefined;
   #svgCursors = {
     location: {
       path: 'M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12 ,2Z',
@@ -76,7 +88,7 @@ export default class samoBoard {
       type: 'rect', // polygon, arc, arcto, text
       drawName: 'rect', // 用户自定义
       rotate: 0,
-      translate: [],
+      // translate: [],
       lineDash: [],
       gco: 'source-cover',
       strokeStyle: '#333',
@@ -89,8 +101,8 @@ export default class samoBoard {
       wrap: undefined,
       autoAppend: true, // 是否自动把canvas append到父级容器
       ctxStyle: {
-        rotate: 0,
-        translate: [0, 0],
+        // rotate: 0,
+        // translate: [0, 0],
         strokeStyle: '#333',
         fillStyle: 'transparent',
         lineWidth: 1, 
@@ -107,37 +119,30 @@ export default class samoBoard {
     return parseFloat(floatNumber.toFixed(fixed));
   }
   // 计算图片显示宽高
-  calcImageSize(width, height) {
+  
+  
+  #calcImageSize(width, height) {
     let _obj = {
-      width: 0,
-      height: 0,
+      viewWidth: 0,
+      viewHeight: 0,
       offsetX: 0,
       offsetY: 0,
       scaled: 1
     };
     if (width && height) {
-      const _canvas = this.#canvas
-      if (_canvas.width > width && _canvas.height > height) {
-        _obj.width = width;
-        _obj.height = height;
-        _obj.offsetX = this.normalFloat((_canvas.width - _obj.width) / 2);
-        _obj.offsetY = this.normalFloat((_canvas.height - _obj.height) / 2);
-        _obj.scaled = 1;
-      } else {
-        _obj.width = Math.round(width * (_canvas.height / height));
-        if (_obj.width > _canvas.width) {
-          _obj.width = _canvas.width;
-          _obj.height = Math.round(height * (_canvas.width / width));
-          _obj.offsetX = 0;
-          _obj.offsetY = this.normalFloat((_canvas.height - _obj.height) / 2);
-          _obj.scaled = this.normalFloat(_canvas.width / width, 3);
-        } else {
-          _obj.height = _canvas.height;
-          _obj.offsetY = 0;
-          _obj.offsetX = this.normalFloat((_canvas.width - _obj.width) / 2);
-          _obj.scaled = this.normalFloat(_canvas.height / height, 3);
-        }
+      const _container = {
+        width: this.#wrap.clientWidth,
+        height: this.#wrap.clientHeight
       }
+      _obj.scaled = Math.min((_container.width/width), (_container.height/height), 1)
+      _obj.viewWidth = Math.floor(width * _obj.scaled);
+      _obj.viewHeight = Math.floor(height * _obj.scaled);
+      // console.log('calc image size')
+      // console.log(`_obj.scaled: ${_obj.scaled}`)
+      // console.log(_container.width, _obj.viewWidth)
+      // console.log(_container.height, _obj.viewHeight)
+      _obj.offsetX = _container.width > _obj.viewWidth ? Math.floor((_container.width - _obj.viewWidth) /2) : 0
+      _obj.offsetY = _container.height > _obj.viewHeight ? Math.floor((_container.height - _obj.viewHeight) /2) : 0
     }
     return _obj;
   }
@@ -155,17 +160,17 @@ export default class samoBoard {
       image.src = src;
       image.onload = () => {
         if (calcScaled) {
-          const { height, width, scaled, offsetX, offsetY } = this.calcImageSize(image.naturalWidth, image.naturalHeight);
+          const { viewHeight, viewWidth, scaled, offsetX, offsetY } = this.#calcImageSize(image.naturalWidth, image.naturalHeight);
           resolve({
             src,
             success: true,
-            msg: 'load image complite',
+            message: 'load image complite',
             data: image,
             scaled,
             offsetX,
             offsetY,
-            viewWidth: width,
-            viewHeight: height,
+            viewWidth,
+            viewHeight,
             width: image.naturalWidth,
             height: image.naturalHeight
           });
@@ -173,7 +178,7 @@ export default class samoBoard {
           resolve({
             src,
             success: true,
-            msg: 'load image complite',
+            message: 'load image complite',
             data: image,
             width: image.naturalWidth,
             height: image.naturalHeight
@@ -183,11 +188,97 @@ export default class samoBoard {
       image.onerror = () => {
         resolve({
           success: false,
-          msg: 'load image error',
+          message: 'load image error',
           src
         });
       };
     });
+  }
+  updateBackground({index=0, degree=0}) {
+    if (this.#bgList && this.#bgList.length && this.#bgList[index]) {
+      this.#bgList[index]['rotate'] = degree
+    } else {
+      console.warn(`[samo-board warning]: bgList miss index of ${index} background`)
+    }
+  }
+  appendBackground(obj={}) {
+    return new Promise(async resolve => {
+      const {src, reverse, direction} = obj;
+      let _direction = !direction ? 'vertical' : 'horizontal'
+      if (!src) {
+        resolve({
+          success: false,
+          message: 'miss src param'
+        })
+      }
+      let _bgSection = await this.asyncLoadImage(src);
+      _bgSection['direction'] = _direction
+      if (this.#bgList && this.#bgList.length) {
+        this.#dragOffset ={
+          x: 0,
+          y: 0
+        } 
+        let _totalHeight = 0;
+        let _totalWidth = 0;
+        if (reverse) {
+          // if (_direction === 'vertical') {
+          //   this.#bgList.forEach(val=>{
+          //     _totalHeight += val.height
+          //   })
+          //   _bgSection['offsetX'] = 0;
+          //   _bgSection['offsetY'] = _totalHeight;
+          // }
+          // this.#bgList.unshift(_bgSection)
+        } else {
+          if (_direction === 'vertical') {
+            
+            this.#bgList.forEach(val=>{
+              _totalHeight += val.height
+            })
+            _bgSection['offsetX'] = 0;
+            _bgSection['offsetY'] = _totalHeight;
+            
+            this.#bgList.push(_bgSection)
+
+            _totalHeight += _bgSection.height
+            let _maxWidth = Math.max(...this.#bgList.map(val => val.width))
+            
+            const _res = this.#calcImageSize(_maxWidth, _totalHeight)
+            this.#zoomSize = Math.min(...this.#bgList.map(val => val.scaled));
+            this.#dragOffset ={
+              x: _res.offsetX,
+              y: _res.offsetY
+            } 
+            this.#background['width'] = _maxWidth
+            this.#background['height'] = _totalHeight
+            this.#background['viewWidth'] = _res.viewWidth
+            this.#background['viewHeight'] = _res.viewHeight
+            this.#background['centerX'] = Math.floor(_maxWidth/2)
+            this.#background['centerY'] = Math.floor(_totalHeight/2)
+          }
+          
+        }
+        resolve()
+      } else {
+        this.#dragOffset = {
+          x: _bgSection.offsetX,
+          y: _bgSection.offsetY
+        }
+        _bgSection['offsetX'] = 0;
+        _bgSection['offsetY'] = 0;
+        this.#bgList = [_bgSection]
+        this.#background['width'] = _bgSection.width
+        this.#background['height'] = _bgSection.height
+        this.#background['viewWidth'] = _bgSection.viewWidth
+        this.#background['viewHeight'] = _bgSection.viewHeight
+        this.#background['centerX'] = Math.floor(_bgSection.width/2)
+        this.#background['centerY'] = Math.floor(_bgSection.height/2)
+        console.log(`#background`)
+        console.log(this.#background)
+        this.#zoomSize = _bgSection.scaled;
+        resolve()
+      }
+    })
   }
   setBackground(obj={}){
     return new Promise(async resolve=>{
@@ -197,35 +288,31 @@ export default class samoBoard {
       }, obj)
       if (_obj.src) {
         let _bgSection = await this.asyncLoadImage(_obj.src);
-        _bgSection['rotate'] = 10
+        if (_obj.rotate !== undefined) {
+          _bgSection['rotate'] = _obj.rotate
+        }
+        let prevScaled = 1
         if (_bgSection.success) {
           if (_obj.reverse) {
             // 倒序插入
             this.#bgList.unshift(_bgSection)
-            if(this.#bgList.length) {
+            if(this.#bgList.length && this.#bgList.length > 1) {
               for(let i=1;i<this.#bgList.length;i++) {
                 const _prevItem = this.#bgList[i-1];
                 this.#bgList[i].offsetY = _prevItem.height+_prevItem.offsetY
               }
             }
-            let prevScaled = 1
             if (this.#bgList.length) {
               prevScaled = this.#bgList[0].scaled
             }
-            this.#zoomSize = Math.min(prevScaled, _bgSection.scaled);
-            // this.options.pencilStyle.lineWidth = 1/this.#zoomSize*2.5
-            // this.options.adjustDotStyle.lineWidth = 1/this.#zoomSize*3
           } else {
             // 顺序插入
             this.#bgList.push(_bgSection)
-            let prevScaled = 1
-            if (this.#bgList.length>0) {
+            if (this.#bgList.length) {
               prevScaled = this.#bgList[this.#bgList.length-1].scaled
             }
-            this.#zoomSize = Math.min(prevScaled, _bgSection.scaled);
-            // this.options.pencilStyle.lineWidth = 1/this.#zoomSize*2.5
-            // this.options.adjustDotStyle.lineWidth = 1/this.#zoomSize*3
           }
+          this.#zoomSize = Math.min(prevScaled, _bgSection.scaled);
         }
         resolve()
       } else {
@@ -278,22 +365,25 @@ export default class samoBoard {
     if (this.opts.autoAppend) {
       if (!this.opts.wrap) {
         this.#wrap = document.createElement('div')
-        this.#wrap.style.cssText = `width: 400px;height:300px;`
+        this.#wrap.style.cssText = `width: 400px;height: 300px;`
       } else {
         this.#wrap = this.opts.wrap;
       }
     }
-    // console.log("初始化samo-board");
+    console.log("初始化samo-board");
     this.#canvas = document.createElement("canvas");
     this.#ctx = this.#canvas.getContext('2d');
+    console.dir(this.#wrap)
     if (this.#wrap) {
       this.#wrap.appendChild(this.#canvas);
       this.#canvas.height = this.#wrap.clientHeight
       this.#canvas.width = this.#wrap.clientWidth;
     }
     // this.#canvas.style.cssText = `display:grid;background-color: #fff;`
-    console.log('init')
-    
+    // 渲染
+    this.#renderBoard()
+    this.setDrawType()
+
     this.#canvas.oncontextmenu = e => {
       e.preventDefault();
     };
@@ -301,9 +391,79 @@ export default class samoBoard {
     this.#canvas.addEventListener('wheel', this.#wheelFn, false);
     this.#bindKeysEvents()
 
-    this.#renderBoard()
-    this.setDrawType()
+    this.#windowResizeFn = e => this.#windowResize(e);
+    window.addEventListener('resize', this.#windowResizeFn, false);
+    this.#wrapSizeObserver()
+
     return this;
+  }
+  #wrapSizeObserver() {
+    if (!this.#wrap) {
+      console.warn('没有#wrap');
+      return;
+    }
+    const resizeObserver = new ResizeObserver(async entries => {
+      this.#windowResize();
+    });
+    resizeObserver.observe(this.#wrap);
+  }
+  async #windowResize($event) {
+    if (!this.#resizing) {
+      this.#resizing = setTimeout(() => {
+        this.#canvas.width = 0;
+        this.#canvas.height = 0;
+        const _wrapRect = this.#wrap;
+        this.#canvas.width = _wrapRect.clientWidth;
+        this.#canvas.height = _wrapRect.clientHeight;
+
+        if (this.#bgList && this.#bgList.length) {
+          if (this.#bgList.length === 1) {
+            let _bgSection = this.#calcImageSize(this.#bgList[0].data.naturalWidth, this.#bgList[0].data.naturalHeight);
+            this.#dragOffset = {
+              x: _bgSection.offsetX,
+              y: _bgSection.offsetY
+            }
+            val['offsetX'] = 0;
+            val['offsetY'] = 0;
+            val['scaled'] = _bgSection.scaled
+            this.#zoomSize = _bgSection.scaled;
+          } else {
+            let _totalHeight = 0;
+            let _totalWidth = 0;
+            let _zoomSize = 1
+            this.#bgList.forEach(val => {
+              const {scaled, offsetX, offsetY, viewHeight, viewWidth} = this.#calcImageSize(val.data.naturalWidth, val.data.naturalHeight);
+              val['scaled'] = scaled
+              // val['offsetX'] = offsetX
+              // val['offsetY'] = offsetY
+              // val['viewHeight'] = viewHeight
+              // val['viewWidth'] = viewWidth
+              _zoomSize = Math.min(_zoomSize, val.scaled)
+              if (val.direction === 'vertical') {
+                _totalHeight += val.height;
+                _totalWidth = Math.max(val.width, _totalWidth)
+              } else if (val.direction === 'horizontal') {
+                _totalWidth += val.width
+                _totalHeight = Math.max(val.height, _totalHeight)
+              }
+            })
+            this.#zoomSize = _zoomSize
+            let _res = this.#calcImageSize(_totalWidth, _totalHeight);
+            this.#dragOffset = {
+              x: _res.offsetX,
+              y: _res.offsetY
+            }
+            this.#background['width'] = _totalWidth
+            this.#background['height'] = _totalHeight
+            this.#background['centerX'] = Math.floor(_totalWidth/2)
+            this.#background['centerY'] = Math.floor(_totalHeight/2)
+          }
+        }
+        
+        clearTimeout(this.#resizing)
+        this.#resizing = undefined;
+      }, 500)
+    }
   }
   #bindKeysEvents() {
     window.addEventListener('keydown', (e)=>this.#windowKeyDown(e), false);
@@ -345,12 +505,14 @@ export default class samoBoard {
     for (let key in _configs) {
       if (key === 'gco') {
         ctx.globalCompositeOperation = _configs[key];
-      } else if(key==='translate') {
-        ctx.translate(_configs[key][0], _configs[key][1]);
-      } else if(key === 'lineDash') {
+      } 
+      else if(key==='lineWidth') {
+        ctx[key] = _configs[key]/this.#zoomSize;
+      } 
+      else if(key === 'lineDash') {
         // console.log(_configs[key])
         ctx.setLineDash(_configs[key])
-      } else if (!['rotate'].includes(key)) {
+      } else if (!['rotate', 'translate'].includes(key)) {
         ctx[key] = _configs[key];
       }
     }
@@ -384,18 +546,40 @@ export default class samoBoard {
   #renderBackground() {
     if (this.#bgList && this.#bgList.length) {
       this.#setCtx(this.#ctx, {gco: 'destination-over'})
-      if (this.#bgList[0].rotate !== undefined) {
-        const _center = this.#findOutCenter(this.#canvas)
-        this.#ctx.translate(_center.x, _center.y)
-        this.#ctx.rotate(this.#bgList[0].rotate * Math.PI /180)
-        this.#ctx.translate(-_center.x, -_center.y)
-      }
+      // if (this.#background.degree) {
+      //   const _center = {
+      //     x: Math.floor(this.#background.width/2) + this.#dragOffset.x,
+      //     y: Math.floor(this.#background.height/2) + this.#dragOffset.y
+      //   }
+      //   this.#ctx.translate(_center.x, _center.y)
+      //   this.#ctx.rotate(this.#background.degree * Math.PI /180)
+      //   this.#ctx.translate(-_center.x, -_center.y)
+      // }
       this.#bgList.forEach(val => {
         if (val.success && val.data) {
           this.#ctx.drawImage(val.data, val.offsetX, val.offsetY);
         }
       })
       this.#ctx.restore()
+    }
+  }
+  setStageDegree(degree=0){
+    if (!isNaN(degree) && degree.constructor === Number && degree && !this.#intervalHandler) {
+      this.#intervalHandler = setInterval(()=>{
+        if (degree > 0) {
+          if (this.#stageDegree < degree) {
+            this.#stageDegree+=1;
+          } else {
+            clearInterval(this.#intervalHandler)
+          }
+        } else if (degree < 0) {
+          if (this.#stageDegree > degree) {
+            this.#stageDegree-=1;
+          } else {
+            clearInterval(this.#intervalHandler)
+          }
+        }
+      })
     }
   }
   selectDraw({pointX=0, pointY=0, ctrlKey=false}) {
@@ -408,7 +592,7 @@ export default class samoBoard {
         if (_focused !== undefined) {
           this.#draws[_focused]['selected'] = !this.#draws[_focused].selected;
         }
-        this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected))
+        this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected && !val.lock))
         // this.#generatePeaks(this.#originSelectedDraws)
       } else {
         if (this.#peakRect) {
@@ -421,14 +605,14 @@ export default class samoBoard {
           if (_focused !== undefined) {
             this.#draws[_focused]['selected'] = true;
           }
-          this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected))
+          this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected && !val.lock))
           // this.#generatePeaks(this.#originSelectedDraws)
         } else {
           this.#draws.forEach(val => val.selected = false)
           if (_focused !== undefined) {
             this.#draws[_focused]['selected'] = true;
           }
-          this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected))
+          this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val => val.selected && !val.lock))
           // this.#generatePeaks(this.#originSelectedDraws)
         }
         
@@ -475,11 +659,21 @@ export default class samoBoard {
   }
   // 还原缩放
   zoomReset() {
-    this.#dragOffset = {
-      x: 0,
-      y: 0
-    };
-    this.#zoomSize = 1;
+    if (this.#bgList && this.#bgList.length) {
+      const _scaledList = this.#bgList.map(val => val.scaled)
+      this.#dragOffset = {
+        x: this.#bgList[0].offsetX,
+        y: this.#bgList[0].offsetY,
+      }
+      console.log(_scaledList, this.#dragOffset)
+      this.#zoomSize = Math.min(..._scaledList)
+    } else {
+      this.#zoomSize = 1;
+      this.#dragOffset = {
+        x: 0,
+        y: 0
+      };
+    }
   }
   // 获取缩放倍数
   getZoomSize() {
@@ -569,7 +763,17 @@ export default class samoBoard {
       case "rect":
         ctx.save()
         let _path2d = new Path2D();
-        _path2d.rect(obj.x, obj.y, obj.width, obj.height);
+        let _bgOffset = {
+          x: 0,
+          y: 0
+        }
+        if (this.#bgList && this.#bgList.length) {
+          _bgOffset = {
+            x: this.#bgList[0].offsetX,
+            y: this.#bgList[0].offsetY
+          }
+        }
+        _path2d.rect(obj.x+_bgOffset.x, obj.y+_bgOffset.y, obj.width, obj.height);
         if (obj.rotate !== undefined) {
           const _center = this.#findOutCenter(obj)
           ctx.translate(_center.x, _center.y)
@@ -782,7 +986,7 @@ export default class samoBoard {
   }
   // 修正翻转调整后的坐标错误偏差
   #revisionDraws() {
-    let _selectedDraws = this.#draws.filter(val => val.selected)
+    let _selectedDraws = this.#draws.filter(val => val.selected && !val.lock)
     _selectedDraws.forEach(_item => {
       if (this.#currentPeak) {
         switch (this.#currentPeak.code) {
@@ -818,11 +1022,11 @@ export default class samoBoard {
       }
     })
   }
-  #modifyDraws({offsetX, offsetY}) {
+  #updateDraws({offsetX, offsetY}) {
     if (offsetX === undefined || offsetY === undefined || offsetX.constructor !== Number || offsetY.constructor !== Number) {
       return false;
     }
-    let _selectedDraws = this.#draws.filter(val => val.selected === true)
+    let _selectedDraws = this.#draws.filter(val => val.selected && !val.lock)
     if (this.#currentPeak) {
       const _ds_origin = {
         x: (offsetX - this.#hoverPoint.x),
@@ -984,7 +1188,7 @@ export default class samoBoard {
       }
       
       if (!this.#spacebarPressed && this.#lBtnPressing) {
-        this.#modifyDraws({offsetX:e.offsetX, offsetY:e.offsetY})
+        this.#updateDraws({offsetX:e.offsetX, offsetY:e.offsetY})
       }
     }
     if (e.button === 2) {
@@ -994,7 +1198,7 @@ export default class samoBoard {
   pointerUpFn(e) {
     if (e.button === 0) {
       if (!this.#spacebarPressed) {
-        const _selectedDraws = this.#draws.filter(val => val.selected)
+        const _selectedDraws = this.#draws.filter(val => val.selected && !val.lock)
         
         if (!_selectedDraws.length) {
           this.#originSelectedDraws = undefined;
@@ -1034,7 +1238,7 @@ export default class samoBoard {
   setDrawsData(draws) {
     console.log('set draws data')
     this.#draws = this.constructor.cloneDeep(draws)
-    this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val=>val.selected))
+    this.#originSelectedDraws = this.constructor.cloneDeep(this.#draws.filter(val=>val.selected && !val.lock))
     // this.#this.#ctx.aks(this.#draws.filter(val=>val.selected));
   }
   setCustomDrawType({type, downFn, moveFn, upFn, outFn}) {
@@ -1093,7 +1297,7 @@ export default class samoBoard {
           this.#setCtx(this.#ctx, {
             lineWidth: 1
           })
-          _path.arc(val.x, val.y, val.radius, 0, 2 * Math.PI);
+          _path.arc(val.x, val.y, val.radius/this.#zoomSize, 0, 2 * Math.PI);
           _flag = this.#ctx.isPointInPath(_path, pointX, pointY)
           if (_flag) {
             _cursor = val.cursor
@@ -1119,21 +1323,23 @@ export default class samoBoard {
       // console.log('draws')
       for (let i=(this.#draws.length-1);i>=0;i--) {
         let val = this.#draws[i]
-        if (val.rotate !== undefined) {
-          // this.#ctx.save()
-          const _center = this.#findOutCenter(val)
-          this.#ctx.translate(_center.x, _center.y)
-          this.#ctx.rotate(val.rotate * Math.PI /180)
-          this.#ctx.translate(-_center.x, -_center.y)
-        }
-        const _path = this.#drawToSvgPath(val)
-        let _flag = (!val.fillStyle || val.fillStyle === 'transparent') ? this.#ctx.isPointInStroke(_path, pointX, pointY) : this.#ctx.isPointInPath(_path, pointX, pointY)
-        if (_flag) {
-          _cursor = 'move'
-          _drawIndex = i;
-          _draw = val;
-          this.#ctx.restore()
-          break;
+        if (!val.lock) {
+          if (val.rotate !== undefined) {
+            // this.#ctx.save()
+            const _center = this.#findOutCenter(val)
+            this.#ctx.translate(_center.x, _center.y)
+            this.#ctx.rotate(val.rotate * Math.PI /180)
+            this.#ctx.translate(-_center.x, -_center.y)
+          }
+          const _path = this.#drawToSvgPath(val)
+          let _flag = (!val.fillStyle || val.fillStyle === 'transparent') ? this.#ctx.isPointInStroke(_path, pointX, pointY) : this.#ctx.isPointInPath(_path, pointX, pointY)
+          if (_flag) {
+            _cursor = 'move'
+            _drawIndex = i;
+            _draw = val;
+            this.#ctx.restore()
+            break;
+          }
         }
       }
     }
@@ -1181,7 +1387,7 @@ export default class samoBoard {
   }
   #renderPeaks(){
     // console.log('render peaks')
-    this.#generatePeaks(this.#draws.filter(val => val.selected))
+    this.#generatePeaks(this.#draws.filter(val => val.selected && !val.lock))
     if (this.#peakRect) {
       this.#renderDraw(this.#ctx, this.#peakRect)
     }
@@ -1196,7 +1402,7 @@ export default class samoBoard {
           lineWidth: 1
         })
         const _peak = new Path2D()
-        _peak.arc(val.x, val.y, val.radius, (_is_rotate ? val.startAngle : 0), (_is_rotate ? val.endAngle : 2 * Math.PI) );
+        _peak.arc(val.x, val.y, val.radius/this.#zoomSize, (_is_rotate ? val.startAngle : 0), (_is_rotate ? val.endAngle : 2 * Math.PI) );
         
         if (this.#peakRect.rotate) {
           const _center = this.#findOutCenter(this.#peakRect)
@@ -1210,28 +1416,88 @@ export default class samoBoard {
       })
     }
   }
+  #renderRotatePoint() {
+    let _center = {
+      x: 0,
+      y: 0
+    }
+    if (this.#background && this.#background.centerX && this.#background.centerY) {
+      _center = {
+        x: this.#background.centerX,
+        y: this.#background.centerY
+      }
+    } else {
+      _center = {
+        x: Math.floor(this.#canvas.clientWidth/2),
+        y: Math.floor(this.#canvas.clientHeight/2)
+      }
+    }
+    const _path = new Path2D()
+    this.#setCtx(this.#ctx, {
+      lineWidth: 1,
+      strokeStyle: 'red',
+      fillStyle: 'red'
+    })
+    _path.arc(_center.x, _center.y, 3/this.#zoomSize, 0, 2 * Math.PI);
+    this.#ctx.fill(_path)
+    // this.#ctx.stroke(_path)
+  }
+  #resetStage(){
+    let _width = this.#wrap.clientWidth
+    let _height = this.#wrap.clientHeight
+    if (this.#background && this.#background.width && this.#background.height) {
+      _width = Math.max(this.#background.width, this.#wrap.clientWidth)
+      _height = Math.max(this.#background.height, this.#wrap.clientHeight)
+    }
+    this.#ctx.clearRect(-_width, -_height, _width*3, _height*3)
+
+    this.#ctx.resetTransform()
+    // console.log(this.#zoomSize, this.#dragOffset.x, this.#dragOffset.y)
+    this.#ctx.translate(this.#dragOffset.x, this.#dragOffset.y);
+    this.#ctx.scale(this.#zoomSize, this.#zoomSize);
+
+    this.#rotateStage()
+    // 默认状态
+    this.#setCtx(this.#ctx)
+    this.#ctx.save()
+  }
+  #rotateStage() {
+    if (this.#stageDegree) {
+      let _center = {
+        x: 0,
+        y: 0
+      }
+      if (this.#background && this.#background.centerX && this.#background.centerY) {
+        _center = {
+          x: this.#background.centerX,
+          y: this.#background.centerY
+        }
+      } else {
+        _center = {
+          x: Math.floor(this.#canvas.clientWidth/2),
+          y: Math.floor(this.#canvas.clientHeight/2)
+        }
+      }
+      this.#ctx.translate(_center.x, _center.y)
+      this.#ctx.rotate(this.#stageDegree * Math.PI /180)
+      this.#ctx.translate(-_center.x, -_center.y)
+    }
+  }
   #renderBoard() {
-    // console.log('render board')
     if (!this.#renderTime) {
       this.#renderTime = new Date().getTime()
     }
-    this.#ctx.clearRect(-this.#wrap.clientWidth, -this.#wrap.clientHeight, this.#wrap.clientWidth*3, this.#wrap.clientHeight*3)
-    // this.#ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.#ctx.resetTransform()
-    
-    this.#ctx.scale(this.#zoomSize, this.#zoomSize);
-    this.#ctx.translate(this.#dragOffset.x / this.#zoomSize, this.#dragOffset.y / this.#zoomSize);
-    // 默认状态
-    this.#ctx.globalCompositeOperation = 'source-over';
-    // this.#setCtx(this.#ctx)
-    this.#ctx.save()
+
+    this.#resetStage()
+
+    this.#renderBackground()
     this.#renderDraws()
     // this.#renderTmpDraw()
     // this.#renderCustomAction()
-    // this.#ctx.restore()
     this.#renderPeaks()
+    this.#renderRotatePoint()
     // this.#renderCursor()
-    this.#renderBackground()
+    
     // if ((new Date().getTime() - this.#renderTime) < 100 ) {
       window.requestAnimationFrame(() => this.#renderBoard());
     // }

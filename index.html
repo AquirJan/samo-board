@@ -9,6 +9,7 @@
         * {
             padding: 0;
             margin: 0;
+            box-sizing: border-box;
         }
         ul,
         li{
@@ -56,12 +57,20 @@
             width: 100%;
             align-items: center;
             justify-items: center;
-            padding-bottom: .5rem;
+            margin-bottom: .5rem;
         }
         .addon-list {
             display: inline-grid;
             grid-auto-flow: column;
             gap: .5rem;
+        }
+        .addon-list-item{
+            user-select: none;
+        }
+        .samo-board-wrap {
+            /* display: grid; */
+            /* width: 100%; */
+            /* border:1px solid #333; */
         }
     </style>
 </head>
@@ -83,6 +92,16 @@
                         </svg>
                     </a>
                 </li>
+                <li class="addon-list-item">
+                    <a class="addon-btn" id="updatebgL">
+                        L
+                    </a>
+                </li>
+                <li class="addon-list-item">
+                    <a class="addon-btn" id="updatebgR">
+                        R
+                    </a>
+                </li>
             </ul>
         </div>
         <div id="samoBoardWrap" class="samo-board-wrap"></div>
@@ -90,6 +109,7 @@
     <script type="module">
         import samoBoard from './samo-board.js'
         const _samoBoardWrap = document.getElementById('samoBoardWrap')
+        let _currentBgDegree = 0;
         // 自动加入父级容器
         const sbIns = new samoBoard({
             wrap: _samoBoardWrap
@@ -102,14 +122,14 @@
         let _leftPressing = false;
 
         let oldDraws = [
-            {"x":246,"y":314,"text":"","selected":true,"lock":false,"width":140,"height":102,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"blue","fillStyle":"rgba(34,54,98, .5)","lineWidth":1},
+            {"x":246,"y":314,"text":"","selected":true,"lock":true,"width":140,"height":102,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"blue","fillStyle":"rgba(34,54,98, .5)","lineWidth":1},
             // {"x":146,"y":114,"text":"","selected":true,"lock":false,"width":140,"height":102,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"blue","fillStyle":"transparent","lineWidth":1},
             {"id":"27be-4e4a99","x":274,"y":383,"text":"","selected":false,"lock":false,"width":86,"height":71,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"green","fillStyle":"blue","lineWidth":1},
         ]
-        sbIns.setBackground({
-            src: './small.png'
-        })
         sbIns.setDrawsData(oldDraws)
+        appendBackgoundAction()
+        
+        // sbIns.setStageDegree(90)
         function setupJCRect() {
             const upAndOutFn = function (e, {draws}) {
                 // console.log('up')
@@ -203,7 +223,27 @@
                 upFn: upAndOutFn,
             }) 
         }
-        
+        async function appendBackgoundAction() {
+            console.log(111111)
+            const _res0 = await sbIns.appendBackground({
+                // src: './small.png',
+                src: './small1.png',
+                // src: './singlebg.jpg'
+            })
+            console.log(_res0)
+            const _res1 = await sbIns.appendBackground({
+                // src: './small.png',
+                src: './small1.png',
+                // src: './singlebg.jpg'
+            })
+            console.log(_res1)
+            const _res2 = await sbIns.appendBackground({
+                // src: './small.png',
+                src: './small1.png',
+                // src: './singlebg.jpg'
+            })
+            console.log(_res2)
+        }
         const exportDD = document.getElementById('exportDD')
         exportDD.addEventListener('click', ()=>{
             const _draws = sbIns.exportDrawsData()
@@ -211,7 +251,22 @@
         })
         const jcrect = document.getElementById('jcrect')
         jcrect.addEventListener('click', setupJCRect)
-        
+        const updatebgL = document.getElementById('updatebgL')
+        const updatebgR = document.getElementById('updatebgR')
+        updatebgL.addEventListener('mousedown', ()=>{
+            // _currentBgDegree-=1
+            // sbIns.updateBackground({
+            //     degree: _currentBgDegree
+            // })
+            sbIns.setStageDegree(-180)
+        })
+        updatebgR.addEventListener('mousedown', ()=>{
+            // _currentBgDegree+=1
+            // sbIns.updateBackground({
+            //     degree: _currentBgDegree
+            // })
+            sbIns.setStageDegree(90)
+        })
         // jcrect.click()
         // sbIns
         // 手动指定加入某个dom
