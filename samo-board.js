@@ -418,7 +418,8 @@ export default class samoBoard {
 
         if (this.#bgList && this.#bgList.length) {
           if (this.#bgList.length === 1) {
-            let _bgSection = this.#calcImageSize(this.#bgList[0].data.naturalWidth, this.#bgList[0].data.naturalHeight);
+            const val = this.#bgList[0];
+            let _bgSection = this.#calcImageSize(val.data.naturalWidth, val.data.naturalHeight);
             this.#dragOffset = {
               x: _bgSection.offsetX,
               y: _bgSection.offsetY
