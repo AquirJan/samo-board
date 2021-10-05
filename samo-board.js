@@ -564,23 +564,27 @@ export default class samoBoard {
       this.#ctx.restore()
     }
   }
-  setStageDegree(degree=0){
+  setStageDegree(degree=0, animate=false){
     if (!isNaN(degree) && degree.constructor === Number && degree && !this.#intervalHandler) {
-      this.#intervalHandler = setInterval(()=>{
-        if (degree > 0) {
-          if (this.#stageDegree < degree) {
-            this.#stageDegree+=1;
-          } else {
-            clearInterval(this.#intervalHandler)
+      if (animate) {
+        this.#intervalHandler = setInterval(()=>{
+          if (degree > 0) {
+            if (this.#stageDegree < degree) {
+              this.#stageDegree+=1;
+            } else {
+              clearInterval(this.#intervalHandler)
+            }
+          } else if (degree < 0) {
+            if (this.#stageDegree > degree) {
+              this.#stageDegree-=1;
+            } else {
+              clearInterval(this.#intervalHandler)
+            }
           }
-        } else if (degree < 0) {
-          if (this.#stageDegree > degree) {
-            this.#stageDegree-=1;
-          } else {
-            clearInterval(this.#intervalHandler)
-          }
-        }
-      })
+        })
+      } else {
+        this.#stageDegree = degree
+      }
     }
   }
   selectDraw({pointX=0, pointY=0, ctrlKey=false}) {
