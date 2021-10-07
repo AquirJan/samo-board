@@ -201,9 +201,14 @@ export default class samoBoard {
       console.warn(`[samo-board warning]: bgList miss index of ${index} background`)
     }
   }
+  setBackgroundDegree(degree){
+    if (!isNaN(degree) && degree.constructor === Number) {
+      this.#background['degree'] = degree
+    }
+  }
   appendBackground(obj={}) {
     return new Promise(async resolve => {
-      const {src, reverse, direction} = obj;
+      const {src, reverse, direction, degree} = obj;
       let _direction = !direction ? 'vertical' : 'horizontal'
       if (!src) {
         resolve({
@@ -213,6 +218,9 @@ export default class samoBoard {
       }
       let _bgSection = await this.asyncLoadImage(src);
       _bgSection['direction'] = _direction
+      if (degree) {
+        _bgSection['degree'] = degree;
+      }
       if (this.#bgList && this.#bgList.length) {
         this.#dragOffset ={
           x: 0,
@@ -547,15 +555,15 @@ export default class samoBoard {
   #renderBackground() {
     if (this.#bgList && this.#bgList.length) {
       this.#setCtx(this.#ctx, {gco: 'destination-over'})
-      // if (this.#background.degree) {
-      //   const _center = {
-      //     x: Math.floor(this.#background.width/2) + this.#dragOffset.x,
-      //     y: Math.floor(this.#background.height/2) + this.#dragOffset.y
-      //   }
-      //   this.#ctx.translate(_center.x, _center.y)
-      //   this.#ctx.rotate(this.#background.degree * Math.PI /180)
-      //   this.#ctx.translate(-_center.x, -_center.y)
-      // }
+      if (this.#background.degree) {
+        const _center = {
+          x: Math.floor(this.#background.width/2),
+          y: Math.floor(this.#background.height/2)
+        }
+        this.#ctx.translate(_center.x, _center.y)
+        this.#ctx.rotate(this.#background.degree * Math.PI /180)
+        this.#ctx.translate(-_center.x, -_center.y)
+      }
       this.#bgList.forEach(val => {
         if (val.success && val.data) {
           this.#ctx.drawImage(val.data, val.offsetX, val.offsetY);
@@ -778,7 +786,7 @@ export default class samoBoard {
             y: this.#bgList[0].offsetY
           }
         }
-        _path2d.rect(obj.x+_bgOffset.x, obj.y+_bgOffset.y, obj.width, obj.height);
+        _path2d.rect(obj.x, obj.y, obj.width, obj.height);
         if (obj.rotate !== undefined) {
           const _center = this.#findOutCenter(obj)
           ctx.translate(_center.x, _center.y)
