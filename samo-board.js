@@ -465,10 +465,6 @@ export default class samoBoard {
             this.#bgList.forEach(val => {
               const {scaled, offsetX, offsetY, viewHeight, viewWidth} = this.#calcImageSize(val.data.naturalWidth, val.data.naturalHeight);
               val['scaled'] = scaled
-              // val['offsetX'] = offsetX
-              // val['offsetY'] = offsetY
-              // val['viewHeight'] = viewHeight
-              // val['viewWidth'] = viewWidth
               _zoomSize = Math.min(_zoomSize, val.scaled)
               if (val.direction === 'vertical') {
                 _totalHeight += val.height;
@@ -480,6 +476,7 @@ export default class samoBoard {
             })
             let _res = this.#calcImageSize(_totalWidth, _totalHeight);
             this.#zoomSize = _res.scaled
+            this.#minZoomSize = Math.min(this.#zoomSize, this.#minZoomSize)
             this.#dragOffset = {
               x: _res.offsetX,
               y: _res.offsetY
@@ -695,13 +692,7 @@ export default class samoBoard {
   // 还原缩放
   zoomReset() {
     if (this.#bgList && this.#bgList.length) {
-      const _scaledList = this.#bgList.map(val => val.scaled)
-      this.#dragOffset = {
-        x: this.#bgList[0].offsetX,
-        y: this.#bgList[0].offsetY,
-      }
-      console.log(_scaledList, this.#dragOffset)
-      this.#zoomSize = Math.min(..._scaledList)
+      this.#windowResize()
     } else {
       this.#zoomSize = 1;
       this.#dragOffset = {
