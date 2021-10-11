@@ -239,7 +239,6 @@ export default class samoBoard {
           // this.#bgList.unshift(_bgSection)
         } else {
           if (_direction === 'vertical') {
-            
             this.#bgList.forEach(val=>{
               _totalHeight += val.height
             })
@@ -252,7 +251,7 @@ export default class samoBoard {
             let _maxWidth = Math.max(...this.#bgList.map(val => val.width))
             
             const _res = this.#calcImageSize(_maxWidth, _totalHeight)
-            this.#zoomSize = Math.min(...this.#bgList.map(val => val.scaled));
+            // this.#zoomSize = Math.min(...this.#bgList.map(val => val.scaled));
             this.#dragOffset ={
               x: _res.offsetX,
               y: _res.offsetY
@@ -263,8 +262,31 @@ export default class samoBoard {
             this.#background['viewHeight'] = _res.viewHeight
             this.#background['centerX'] = Math.floor(_maxWidth/2)
             this.#background['centerY'] = Math.floor(_totalHeight/2)
+          } else if (_direction === 'horizontal') {
+            this.#bgList.forEach(val=>{
+              _totalWidth += val.width
+            })
+            _bgSection['offsetX'] = _totalWidth;
+            _bgSection['offsetY'] = 0
+            
+            this.#bgList.push(_bgSection)
+
+            _totalWidth += _bgSection.width
+            let _maxHeight = Math.max(...this.#bgList.map(val => val.height))
+            
+            const _res = this.#calcImageSize(_totalWidth, _maxHeight)
+            // this.#zoomSize = Math.min(...this.#bgList.map(val => val.scaled));
+            this.#dragOffset ={
+              x: _res.offsetX,
+              y: _res.offsetY
+            } 
+            this.#background['width'] = _totalWidth
+            this.#background['height'] = _maxHeight
+            this.#background['viewWidth'] = _res.viewWidth
+            this.#background['viewHeight'] = _res.viewHeight
+            this.#background['centerX'] = Math.floor(_totalWidth/2)
+            this.#background['centerY'] = Math.floor(_maxHeight/2)
           }
-          
         }
         resolve()
       } else {
@@ -281,8 +303,8 @@ export default class samoBoard {
         this.#background['viewHeight'] = _bgSection.viewHeight
         this.#background['centerX'] = Math.floor(_bgSection.width/2)
         this.#background['centerY'] = Math.floor(_bgSection.height/2)
-        console.log(`#background`)
-        console.log(this.#background)
+        // console.log(`#background`)
+        // console.log(this.#background)
         this.#zoomSize = _bgSection.scaled;
         resolve()
       }
@@ -456,8 +478,8 @@ export default class samoBoard {
                 _totalHeight = Math.max(val.height, _totalHeight)
               }
             })
-            this.#zoomSize = _zoomSize
             let _res = this.#calcImageSize(_totalWidth, _totalHeight);
+            this.#zoomSize = _res.scaled
             this.#dragOffset = {
               x: _res.offsetX,
               y: _res.offsetY
