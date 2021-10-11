@@ -864,7 +864,7 @@ export default class samoBoard {
       lineDash: [8, 6],
       width: (_maxX-_minX),
       height: (_maxY-_minY),
-      rotate: draws.length === 1 ? draws[0].rotate : 0,
+      rotate: 0,
     }
     // console.log(this.#peakRect)
     this.#peaks = [
@@ -1419,6 +1419,12 @@ export default class samoBoard {
     }
 
     if (this.#peaks && this.#peaks.length) {
+      if (this.#peakRect.rotate) {
+        const _center = this.#findOutCenter(this.#peakRect)
+        this.#ctx.translate(_center.x, _center.y)
+        this.#ctx.rotate(this.#peakRect.rotate * Math.PI /180)
+        this.#ctx.translate(-_center.x, -_center.y)
+      }
       this.#peaks.forEach((val,vindex) => {
         let _is_rotate = val.code.match(/-rotate/gi)
         // this.#ctx.save()
@@ -1429,17 +1435,10 @@ export default class samoBoard {
         })
         const _peak = new Path2D()
         _peak.arc(val.x, val.y, val.radius/this.#zoomSize, (_is_rotate ? val.startAngle : 0), (_is_rotate ? val.endAngle : 2 * Math.PI) );
-        
-        if (this.#peakRect.rotate) {
-          const _center = this.#findOutCenter(this.#peakRect)
-          this.#ctx.translate(_center.x, _center.y)
-          this.#ctx.rotate(this.#peakRect.rotate * Math.PI /180)
-          this.#ctx.translate(-_center.x, -_center.y)
-        }
         this.#ctx.fill(_peak)
         this.#ctx.stroke(_peak)
-        this.#ctx.restore()
       })
+      this.#ctx.restore()
     }
   }
   #renderRotatePoint() {
@@ -1521,7 +1520,7 @@ export default class samoBoard {
     // this.#renderTmpDraw()
     // this.#renderCustomAction()
     this.#renderPeaks()
-    this.#renderRotatePoint()
+    // this.#renderRotatePoint()
     // this.#renderCursor()
     
     // if ((new Date().getTime() - this.#renderTime) < 100 ) {
