@@ -93,13 +93,18 @@
                     </a>
                 </li>
                 <li class="addon-list-item">
+                    <a class="addon-btn" id="setRectBtn">
+                        rect
+                    </a>
+                </li>
+                <li class="addon-list-item">
                     <a class="addon-btn" id="updatebgL">
-                        L
+                        rotate left
                     </a>
                 </li>
                 <li class="addon-list-item">
                     <a class="addon-btn" id="updatebgR">
-                        R
+                        rotate right
                     </a>
                 </li>
             </ul>
@@ -226,11 +231,11 @@
         async function appendBackgoundAction() {
             console.log(111111)
             const _res0 = await sbIns.appendBackground({
-                src: './small.png',
-                degree: 10,
-                direction: 'horizontal'
+                // src: './small.png',
+                // degree: 10,
+                // direction: 'horizontal'
                 // src: './small1.png',
-                // src: './singlebg.jpg'
+                src: './singlebg.jpg'
             })
             // console.log(_res0)
             // const _res1 = await sbIns.appendBackground({
@@ -257,6 +262,10 @@
         jcrect.addEventListener('click', setupJCRect)
         const updatebgL = document.getElementById('updatebgL')
         const updatebgR = document.getElementById('updatebgR')
+        const setRectBtn = document.getElementById('setRectBtn')
+        setRectBtn.addEventListener('click', ()=>{
+            sbIns.setDrawType('rect')
+        })
         updatebgL.addEventListener('mousedown', ()=>{
             // _currentBgDegree-=1
             // sbIns.updateBackground({

@@ -251,6 +251,7 @@ export default class samoBoard {
             let _maxWidth = Math.max(...this.#bgList.map(val => val.width))
             
             const _res = this.#calcImageSize(_maxWidth, _totalHeight)
+            this.#zoomSize = _res.scaled
             // this.#zoomSize = Math.min(...this.#bgList.map(val => val.scaled));
             this.#dragOffset ={
               x: _res.offsetX,
@@ -275,6 +276,7 @@ export default class samoBoard {
             let _maxHeight = Math.max(...this.#bgList.map(val => val.height))
             
             const _res = this.#calcImageSize(_totalWidth, _maxHeight)
+            this.#zoomSize = _res.scaled
             // this.#zoomSize = Math.min(...this.#bgList.map(val => val.scaled));
             this.#dragOffset ={
               x: _res.offsetX,
@@ -288,6 +290,8 @@ export default class samoBoard {
             this.#background['centerY'] = Math.floor(_maxHeight/2)
           }
         }
+        this.#minZoomSize = Math.min(this.#minZoomSize, this.#zoomSize)
+        this.#maxZoomSize = Math.max(this.#maxZoomSize, this.#zoomSize)
         resolve()
       } else {
         this.#dragOffset = {
@@ -306,6 +310,8 @@ export default class samoBoard {
         // console.log(`#background`)
         // console.log(this.#background)
         this.#zoomSize = _bgSection.scaled;
+        this.#minZoomSize = Math.min(this.#minZoomSize, this.#zoomSize)
+        this.#maxZoomSize = Math.max(this.#maxZoomSize, this.#zoomSize)
         resolve()
       }
     })
@@ -727,8 +733,8 @@ export default class samoBoard {
   }
   // 放大
   zoomIn({offsetX, offsetY}) {
-    const _offsetX = offsetX === undefined ? Math.floor(this.#canvas.clientWidth/2) : offsetX;
-    const _offsetY = offsetY === undefined ? Math.floor(this.#canvas.clientHeight/2) : offsetY;
+    let _offsetX = offsetX === undefined ? Math.floor(this.#canvas.clientWidth/2) : offsetX;
+    let _offsetY = offsetY === undefined ? Math.floor(this.#canvas.clientHeight/2) : offsetY;
     this.#zoomSize = Number((this.#zoomSize + this.#zoomStep).toFixed(2))
     this.#zoomSize = Math.min(this.#maxZoomSize, this.#zoomSize)
     if (this.#oldZoomSize !== this.#zoomSize) {
@@ -758,6 +764,10 @@ export default class samoBoard {
   // 设置画图类型
   setDrawType(type='pointer', options={}) {
     this.#drawType = type;
+    this.#draws.forEach(val => {
+      val.selected = false;
+    })
+    document.documentElement.style.cursor = 'crosshair'
     // console.log(this.#drawType)
     this.#canvas.removeEventListener('mousedown', this.#pencilDownFn, false);
     this.#canvas.removeEventListener('mousemove', this.#pencilMoveFn, false);
@@ -781,24 +791,10 @@ export default class samoBoard {
     }
   }
   #renderDraw(ctx, obj) {
-    // console.log('render draw')
-    // ctx.restore()
     this.#setCtx(ctx, obj)
-    // console.log(obj.drawName)
     switch(obj.type) {
       case "rect":
-        ctx.save()
         let _path2d = new Path2D();
-        let _bgOffset = {
-          x: 0,
-          y: 0
-        }
-        if (this.#bgList && this.#bgList.length) {
-          _bgOffset = {
-            x: this.#bgList[0].offsetX,
-            y: this.#bgList[0].offsetY
-          }
-        }
         _path2d.rect(obj.x, obj.y, obj.width, obj.height);
         if (obj.rotate !== undefined) {
           const _center = this.#findOutCenter(obj)
@@ -864,7 +860,7 @@ export default class samoBoard {
       lineDash: [8, 6],
       width: (_maxX-_minX),
       height: (_maxY-_minY),
-      rotate: 0,
+      rotate: draws.length === 1 ? draws[0].rotate : 0,
     }
     // console.log(this.#peakRect)
     this.#peaks = [
@@ -1194,6 +1190,8 @@ export default class samoBoard {
         } else {
           this.selectDraw({pointX: this.#hoverPoint.x, pointY: this.#hoverPoint.y, single: false, ctrlKey: e.ctrlKey})
         }
+      } else {
+        this.#dragOffsetOrigin = this.constructor.cloneDeep(this.#dragOffset)
       }
     }
     if (e.button === 2) {
@@ -1247,6 +1245,59 @@ export default class samoBoard {
   pointerOutFn(e) {
     // this.pointerUpFn(e)
   }
+  rectDownFn(e) {
+    if (e.button === 0) {
+      console.log(this.#dragOffset)
+      this.#hoverPoint = {
+        x: e.offsetX,
+        y: e.offsetY,
+      }
+      this.#lBtnPressing = true;
+      console.log(this.#hoverPoint)
+    }
+    if (e.button === 2) {
+
+    }
+  }
+  rectMoveFn(e) {
+    if (e.button === 0) {
+      if (this.#lBtnPressing) {
+        this.#setTmpDraw({
+          x: e.offsetX,
+          y: e.offsetY,
+          strokeStyle: 'red',
+          fillStyle: 'blue',
+          lineWidth: 1
+        })
+      }
+    }
+    if (e.button === 2) {
+      
+    }
+  }
+  rectUpFn(e) {
+    if (e.button === 0) {
+      if (this.#lBtnPressing && this.#tmpDraw) {
+        this.#setTmpDraw({
+          x: e.offsetX,
+          y: e.offsetY,
+          strokeStyle: 'red',
+          fillStyle: 'blue',
+          lineWidth: 1
+        })
+        this.#lBtnPressing = false;
+        this.#draws.push(this.constructor.cloneDeep(this.#tmpDraw))
+        this.#tmpDraw = undefined;
+      }
+      this.setDrawType('pointer')
+    }
+    if (e.button === 2) {
+      
+    }
+  }
+  rectOutFn(e) {
+    // this.rectUpFn(e)
+  }
   #renderCursor() {
     if (this.#currentCursor) {
       document.documentElement.style.cursor = 'vertical-text'
@@ -1296,6 +1347,41 @@ export default class samoBoard {
       this.#canvas.addEventListener('mouseout', this.#pencilOutFn, false);
     }
   }
+  // 获取起点与终点之间的尺寸
+  #getDeltaSize(x, y) {
+    let _deltas = {
+      width: (x - this.#hoverPoint.x) / this.#zoomSize,
+      height: (y - this.#hoverPoint.y) / this.#zoomSize
+    };
+    return _deltas;
+  }
+  // 绘画矩形
+  #setTmpDraw({x, y, text='', strokeStyle='red', lineWidth = 1, fillStyle = 'blue', gco = 'source-over', drawType="rect"}) {
+    const _ds = this.#getDeltaSize(x, y);
+    
+    if (this.#tmpDraw) {
+      this.#tmpDraw['width'] = _ds.width
+      this.#tmpDraw['height'] = _ds.height
+    } else {
+      const _x = (this.#hoverPoint.x - this.#dragOffset.x) / this.#zoomSize;
+      const _y = (this.#hoverPoint.y - this.#dragOffset.y) / this.#zoomSize;
+      this.#tmpDraw = {
+        x: _x,
+        y: _y,
+        lineWidth,
+        // width: _ds.width,
+        // height: _ds.height,
+        type: 'rect',
+        drawType,
+        gco,
+        text,
+        strokeStyle,
+        fillStyle
+      };
+    }
+    
+    return this.#tmpDraw;
+  }
   #detectOverSomething({pointX, pointY}) {
     if (pointX === undefined || pointY === undefined || pointX.constructor !== Number || pointY.constructor !== Number) {
       return {};
@@ -1309,12 +1395,12 @@ export default class samoBoard {
     // console.log(this.#peakRect)
     if (_cursor === 'default' && this.#peakRect) {
       // this.#ctx.save()
-      if (this.#peakRect.rotate !== undefined) {
-        const _center = this.#findOutCenter(this.#peakRect)
-        this.#ctx.translate(_center.x, _center.y)
-        this.#ctx.rotate(this.#peakRect.rotate * Math.PI /180)
-        this.#ctx.translate(-_center.x, -_center.y)
-      }
+      // if (this.#peakRect.rotate !== undefined) {
+      //   const _center = this.#findOutCenter(this.#peakRect)
+      //   this.#ctx.translate(_center.x, _center.y)
+      //   this.#ctx.rotate(this.#peakRect.rotate * Math.PI /180)
+      //   this.#ctx.translate(-_center.x, -_center.y)
+      // }
       if (this.#peaks && this.#peaks.length) {
         for (let i=(this.#peaks.length-1);i>=0;i--) {
           let val = this.#peaks[i]
@@ -1328,7 +1414,7 @@ export default class samoBoard {
           if (_flag) {
             _cursor = val.cursor
             _peak = val;
-            this.#ctx.restore()
+            // this.#ctx.restore()
             break;
           }
         }
@@ -1340,9 +1426,10 @@ export default class samoBoard {
         if (_flag) {
           _peakRect = this.#peakRect
           _cursor = 'move'
-          this.#ctx.restore()
+          // this.#ctx.restore()
         }
       }
+      // this.#ctx.restore()
     }
     
     if (_cursor === 'default' && this.#draws && this.#draws.length) {
@@ -1350,20 +1437,20 @@ export default class samoBoard {
       for (let i=(this.#draws.length-1);i>=0;i--) {
         let val = this.#draws[i]
         if (!val.lock) {
-          if (val.rotate !== undefined) {
-            // this.#ctx.save()
-            const _center = this.#findOutCenter(val)
-            this.#ctx.translate(_center.x, _center.y)
-            this.#ctx.rotate(val.rotate * Math.PI /180)
-            this.#ctx.translate(-_center.x, -_center.y)
-          }
+          // if (val.rotate !== undefined) {
+          //   // this.#ctx.save()
+          //   const _center = this.#findOutCenter(val)
+          //   this.#ctx.translate(_center.x, _center.y)
+          //   this.#ctx.rotate(val.rotate * Math.PI /180)
+          //   this.#ctx.translate(-_center.x, -_center.y)
+          // }
           const _path = this.#drawToSvgPath(val)
           let _flag = (!val.fillStyle || val.fillStyle === 'transparent') ? this.#ctx.isPointInStroke(_path, pointX, pointY) : this.#ctx.isPointInPath(_path, pointX, pointY)
           if (_flag) {
             _cursor = 'move'
             _drawIndex = i;
             _draw = val;
-            this.#ctx.restore()
+            // this.#ctx.restore()
             break;
           }
         }
@@ -1392,13 +1479,13 @@ export default class samoBoard {
     if (e.ctrlKey && Math.abs(_wheelDelta) > 0) {
       if (_wheelDelta > 0) {
         this.zoomIn({
-          offsetX:e.offsetX, 
-          offsetY:e.offsetY
+          offsetX: e.offsetX, 
+          offsetY: e.offsetY
         });
       } else {
         this.zoomOut({
-          offsetX:e.offsetX, 
-          offsetY:e.offsetY
+          offsetX: e.offsetX, 
+          offsetY: e.offsetY
         });
       }
       e.preventDefault();
@@ -1517,7 +1604,7 @@ export default class samoBoard {
 
     this.#renderBackground()
     this.#renderDraws()
-    // this.#renderTmpDraw()
+    this.#renderTmpDraw()
     // this.#renderCustomAction()
     this.#renderPeaks()
     // this.#renderRotatePoint()
