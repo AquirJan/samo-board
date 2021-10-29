@@ -37,6 +37,7 @@ export default class samoBoard {
   };
   #originSelectedDraws=undefined;
   #currentPeak = undefined;
+  #currentRotateCenter = {x: 0, y:0}
   #drawType = 'pointer';
   #pencilDownFn = undefined;
   #pencilMoveFn = undefined;
@@ -791,6 +792,7 @@ export default class samoBoard {
     }
   }
   #renderDraw(ctx, obj) {
+    ctx.save()
     this.#setCtx(ctx, obj)
     switch(obj.type) {
       case "rect":
@@ -1044,6 +1046,25 @@ export default class samoBoard {
       }
     })
   }
+  #calculatePointRelative(center, point){
+    const {x: cx, y: cy} = center;
+    const {x: px, y: py} = point;
+    const _relative = {
+        x: Math.floor(px-cx),
+        y: -Math.floor(py-cy),
+    }
+    return _relative
+  }
+  #calculateDegree(point) {
+    if (!point) {
+        console.warn('calculateDegree miss require params')
+    }
+    const {x, y} = point
+    let _angle = Math.atan2(y, x)  // 极坐标系
+    let _degree = _angle*(180/Math.PI);
+    _degree = -(_degree-90)
+    return _degree
+  }
   #updateDraws({offsetX, offsetY}) {
     if (offsetX === undefined || offsetY === undefined || offsetX.constructor !== Number || offsetY.constructor !== Number) {
       return false;
@@ -1060,13 +1081,18 @@ export default class samoBoard {
       }
       // console.log(`x: ${_ds_origin.x}, y: ${_ds_origin.y}`)
       if (this.#currentPeak.code.match(/-rotate/gi)) {
-        // const _center = this.#findOutCenter(this.#peakRect)
-        _selectedDraws.forEach((val,vindex) => {
-          let _rotate = this.#originSelectedDraws[vindex].rotate !== undefined ? this.#originSelectedDraws[vindex].rotate : 0
-          val['rotate'] = _rotate + 45;
-        //   // this.#peakRect['rotate'] = val.rotate
-          console.log(val.rotate)
-        })
+
+        const _center = this.#findOutCenter(this.#peakRect)
+        // console.log(`_center: ${JSON.stringify(_center)}`)
+        this.#currentRotateCenter = _center;
+        const _relativePoint = this.#calculatePointRelative(_center, {x:this.#hoverPoint.x-this.#dragOffset.x, y:this.#hoverPoint.y-this.#dragOffset.y})
+        // console.log(`this.#hoverPoint: ${JSON.stringify(this.#hoverPoint)}`)
+        // console.log(`_relativePoint: ${JSON.stringify(_relativePoint)}`)
+        const _degree = this.#calculateDegree(_relativePoint)
+        // console.log(`_degree: ${_degree}`)
+        
+        _selectedDraws[0]['rotate'] = _degree;
+        
       }
       switch(this.#currentPeak.code) {
         case 'bm':
@@ -1200,6 +1226,12 @@ export default class samoBoard {
   }
   pointerMoveFn(e) {
     if (e.button === 0) {
+      if (this.#currentPeak && this.#currentPeak.code === 'all-rotate') {
+        this.#hoverPoint = {
+          x: e.offsetX,
+          y: e.offsetY,
+        }
+      }
       // 移动整个场景
       if (this.#spacebarPressed && this.#lBtnPressing) {
         this.#dragOffset['x'] = this.#dragOffsetOrigin.x + e.offsetX - this.#hoverPoint.x;
@@ -1529,21 +1561,7 @@ export default class samoBoard {
     }
   }
   #renderRotatePoint() {
-    let _center = {
-      x: 0,
-      y: 0
-    }
-    if (this.#background && this.#background.centerX && this.#background.centerY) {
-      _center = {
-        x: this.#background.centerX,
-        y: this.#background.centerY
-      }
-    } else {
-      _center = {
-        x: Math.floor(this.#canvas.clientWidth/2),
-        y: Math.floor(this.#canvas.clientHeight/2)
-      }
-    }
+    let _center = this.#currentRotateCenter;
     const _path = new Path2D()
     this.#setCtx(this.#ctx, {
       lineWidth: 1,
