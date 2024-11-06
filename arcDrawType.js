@@ -29,6 +29,15 @@ export default function arcDrawType({samoPadIns, samoPad}={}){
               x: _x,
               y: _y,
             }
+            samoPadIns?.setTmpDraw({
+              x: _downPoint.x,
+              y: _downPoint.y,
+              radius: 1,
+              type: 'arc',
+              drawName: 'arc',
+              strokeStyle: 'red',
+              lineWidth: 2,
+            }, true)
           }
         },
         moveFn: (e) => {
@@ -36,18 +45,11 @@ export default function arcDrawType({samoPadIns, samoPad}={}){
           samoPadIns?.setCursor('crosshair');
           if (_btnVal === 1) {
             if (_lBtnPressing && _dragOffset && _zoomSizeObj) {
+              let _tmpDraw = samoPadIns?.getTmpDraw()
               let _x = (e.offsetX-_dragOffset.x)/_zoomSizeObj.current
               // let _y = (e.offsetY-_dragOffset.y)/_zoomSizeObj.current
-              const _radius = _downPoint.x/_zoomSizeObj.current
-              samoPadIns?.setTmpDraw({
-                x: _downPoint.x/_zoomSizeObj.current,
-                y: _downPoint.y/_zoomSizeObj.current,
-                radius: Math.abs(_x-_radius)/_zoomSizeObj.current,
-                type: 'arc',
-                drawName: 'arc',
-                strokeStyle: 'red',
-                lineWidth: 2,
-              }, true)
+              const _radius = _downPoint.x
+              _tmpDraw.radius = Math.abs(_x-_radius);
             }
           }
           if (_btnVal === 3){
@@ -56,16 +58,16 @@ export default function arcDrawType({samoPadIns, samoPad}={}){
         },
         upFn: (e, params) => {
           const _btnVal = e.which;
-          console.log(params)
+          // console.log(params)
           if (_btnVal === 1) {
             if (_lBtnPressing) {
               _lBtnPressing = false;
               let _tmpDraw = samoPadIns?.getTmpDraw()
-              console.log(_tmpDraw)
+              // console.log(_tmpDraw)
               if (_tmpDraw){
                 _tmpDraw.uuid = samoPad.generateUUID()
                 _tmpDraw.label = params.label
-                console.dir(_tmpDraw)
+                
                 samoPadIns?.addDrawData(_tmpDraw)
                 samoPadIns?.setTmpDraw(null)
               }

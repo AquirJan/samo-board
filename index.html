@@ -152,6 +152,19 @@
         
         const _mockDraws = [
             {
+                type: 'arc',
+                x: 1100,
+                y: 800,
+                radius: 200,
+                label: {
+                    content: 'arc',
+                    // placement: 'bl'
+                },
+                lineWidth: 2,
+                fillStyle: '#777',
+                strokeStyle: '#333'
+            },
+            {
                 type: 'rect',
                 x: 600,
                 y: 200,
@@ -196,7 +209,9 @@
         const _setArcBtn = document.getElementById('setCircleBtn')
         _setArcBtn.addEventListener('click',(e)=>{
             samoPadIns?.setDrawType('arc', {
-                lineWidth: 1
+                label: {
+                    content: 'arc'
+                }
             })
         })
 
@@ -210,11 +225,15 @@
         })
         const _setBrushBtn = document.getElementById('setBrushBtn')
         _setBrushBtn.addEventListener('click',(e)=>{
-            samoPadIns?.setDrawType('brush')
+            samoPadIns?.setDrawType('brush', {
+                lineWidth: 30
+            })
         })
         const _setEraserBtn = document.getElementById('setEraserBtn')
         _setEraserBtn.addEventListener('click',(e)=>{
-            samoPadIns?.setDrawType('eraser')
+            samoPadIns?.setDrawType('eraser', {
+                lineWidth: 30
+            })
         })
 
         const _preview = document.getElementById('preview')

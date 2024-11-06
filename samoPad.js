@@ -2071,11 +2071,11 @@ export default class samoPad {
       _outside = false;
     }
     if (_outside){
-      _y = _rectY - Math.floor(_fontOriginSize/2);
+      _y = _rectY - Math.floor(_fontOriginSize/2) - (draw?.radius??0);
       _x = _rectX;
     }
     if (placement === 'bl'){
-      _y = _rectY + _fontOriginSize + _rectHeight;
+      _y = _rectY + _fontOriginSize + _rectHeight + (draw?.radius??0);
     }
     this.setCtx(_ctx, {strokeStyle, fillStyle, lineWidth, font: `${_fontOriginSize}px ${this.opts?.fontFamily}`})
     if (strokeText){

@@ -65,7 +65,7 @@ export default function polygonDrawType({samoPadIns, samoPad}={}){
                     _tmpDraw.closed = true;
                     _tmpDraw.ways.pop()
                   }
-                  _tmpDraw.label = params.label
+                  // _tmpDraw.label = params.label
                   samoPadIns?.addDrawData(_tmpDraw)
                 }
                 samoPadIns?.setDrawType('pointer')
@@ -95,6 +95,7 @@ export default function polygonDrawType({samoPadIns, samoPad}={}){
                     lineCap: 'square',
                     lineJoin: 'round',
                     lineWidth: 5,
+                    ...params,
                   }, true)
                   _lastWayIndex = 0
                 } else {

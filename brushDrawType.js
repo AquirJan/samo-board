@@ -13,7 +13,7 @@ export default function brushDrawType({samoPadIns, samoPad}={}){
         let _dragOffset = null
         return {
           type: 'brush', // 重要标识
-          downFn: (e) => {
+          downFn: (e, params) => {
             const _btnVal = e.which;
             if (_btnVal === 3){
               // console.log(`鼠标右键`)
@@ -39,6 +39,7 @@ export default function brushDrawType({samoPadIns, samoPad}={}){
                 lineJoin: 'bevel',
                 lineWidth: 20,
                 path2d: _path2d,
+                ...params
               }, true)
             }
           },
