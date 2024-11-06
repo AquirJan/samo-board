@@ -52,6 +52,7 @@ export default function polygonDrawType({samoPadIns, samoPad}={}){
           },
           upFn: (e, params) => {
             const _btnVal = e.which;
+            console.log(params)
             if (_btnVal === 1) {
               if (samoPadIns?.detectIsDBClick(e.timeStamp)) {
                 let _tmpDraw = samoPadIns?.getTmpDraw()
@@ -59,10 +60,12 @@ export default function polygonDrawType({samoPadIns, samoPad}={}){
                 if (_tmpDraw) {
                   let _lastWayPoint = _tmpDraw.ways.pop()
                   _tmpDraw.uuid = samoPad.generateUUID()
+                  _closeGap = _closeGap / _zoomSizeObj.current
                   if (_tmpDraw.ways.length>=3 && _tmpDraw.x-_closeGap <= _lastWayPoint.x && _tmpDraw.x+_closeGap >= _lastWayPoint.x && _tmpDraw.y-_closeGap <= _lastWayPoint.y && _tmpDraw.y+_closeGap >= _lastWayPoint.y){
                     _tmpDraw.closed = true;
                     _tmpDraw.ways.pop()
                   }
+                  _tmpDraw.label = params.label
                   samoPadIns?.addDrawData(_tmpDraw)
                 }
                 samoPadIns?.setDrawType('pointer')

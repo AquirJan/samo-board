@@ -56,6 +56,7 @@ export default function arcDrawType({samoPadIns, samoPad}={}){
         },
         upFn: (e, params) => {
           const _btnVal = e.which;
+          console.log(params)
           if (_btnVal === 1) {
             if (_lBtnPressing) {
               _lBtnPressing = false;
@@ -63,6 +64,8 @@ export default function arcDrawType({samoPadIns, samoPad}={}){
               console.log(_tmpDraw)
               if (_tmpDraw){
                 _tmpDraw.uuid = samoPad.generateUUID()
+                _tmpDraw.label = params.label
+                console.dir(_tmpDraw)
                 samoPadIns?.addDrawData(_tmpDraw)
                 samoPadIns?.setTmpDraw(null)
               }

@@ -36,7 +36,8 @@
         }
         .addon-btn {
             cursor: pointer;
-            display: inline-grid;
+            gap: .5rem;
+            display: inline-flex;
             border:1px solid #333;
             align-items: center;
             justify-items: center;
@@ -81,25 +82,51 @@
         <div class="addon-list-wrap">
             <ul class="addon-list">
                 <li class="addon-list-item">
-                    <a class="addon-btn" id="exportDD">
+                    <a class="addon-btn" id="exportPic">
+                        <span>export pic</span>
                         <svg class="icom icom-share" viewBox="0 0 32 32">
                             <path d="M8 20c0 0 1.838-6 12-6v6l12-8-12-8v6c-8 0-12 4.99-12 10zM22 24h-18v-12h3.934c0.315-0.372 0.654-0.729 1.015-1.068 1.374-1.287 3.018-2.27 4.879-2.932h-13.827v20h26v-8.395l-4 2.667v1.728z"></path>
                         </svg>
                     </a>
                 </li>
                 <li class="addon-list-item">
+                    <a class="addon-btn" id="exportDD">
+                        <span>export draws data</span>
+                    </a>
+                </li>
+                <!-- <li class="addon-list-item">
                     <a class="addon-btn" id="jcrect">
                         <svg class="icom icom-leaf" viewBox="0 0 32 32">
                             <path d="M31.604 4.203c-3.461-2.623-8.787-4.189-14.247-4.189-6.754 0-12.257 2.358-15.099 6.469-1.335 1.931-2.073 4.217-2.194 6.796-0.108 2.296 0.278 4.835 1.146 7.567 2.965-8.887 11.244-15.847 20.79-15.847 0 0-8.932 2.351-14.548 9.631-0.003 0.004-0.078 0.097-0.207 0.272-1.128 1.509-2.111 3.224-2.846 5.166-1.246 2.963-2.4 7.030-2.4 11.931h4c0 0-0.607-3.819 0.449-8.212 1.747 0.236 3.308 0.353 4.714 0.353 3.677 0 6.293-0.796 8.231-2.504 1.736-1.531 2.694-3.587 3.707-5.764 1.548-3.325 3.302-7.094 8.395-10.005 0.292-0.167 0.48-0.468 0.502-0.804s-0.126-0.659-0.394-0.862z"></path>
                         </svg>
                     </a>
-                </li>
+                </li> -->
                 <li class="addon-list-item">
                     <a class="addon-btn" id="setRectBtn">
                         rect
                     </a>
                 </li>
                 <li class="addon-list-item">
+                    <a class="addon-btn" id="setCircleBtn">
+                        circle
+                    </a>
+                </li>
+                <li class="addon-list-item">
+                    <a class="addon-btn" id="setPolygonBtn">
+                        polygon
+                    </a>
+                </li>
+                <li class="addon-list-item">
+                    <a class="addon-btn" id="setBrushBtn">
+                        brush
+                    </a>
+                </li>
+                <li class="addon-list-item">
+                    <a class="addon-btn" id="setEraserBtn">
+                        eraser
+                    </a>
+                </li>
+                <!-- <li class="addon-list-item">
                     <a class="addon-btn" id="updatebgL">
                         rotate left
                     </a>
@@ -108,7 +135,7 @@
                     <a class="addon-btn" id="updatebgR">
                         rotate right
                     </a>
-                </li>
+                </li> -->
             </ul>
         </div>
         <div id="samoBoardWrap" class="samo-board-wrap"></div>
@@ -117,29 +144,86 @@
     <script type="module">
         import samoPad from './samoPad.js'
         import rectDrawType from './rectDrawType.js'
+        import arcDrawType from './arcDrawType.js'
+        import polygonDrawType from './polygonDrawType.js'
+        import brushDrawType from './brushDrawType.js'
+        import eraserDrawType from './eraserDrawType.js'
+
+        
+        const _mockDraws = [
+            {
+                type: 'rect',
+                x: 600,
+                y: 200,
+                width: 200,
+                height: 200,
+                label:{
+                    content: 'rect',
+                    // placement: 'bl'
+                },
+                strokeStyle: 'blue',
+                fillStyle: 'red',
+                lineWidth: 2
+            }
+        ]
         const _samoBoardWrap = document.getElementById('samoBoardWrap')
         // 自动加入父级容器
         const samoPadIns = new samoPad({
             wrap: _samoBoardWrap
         })
-        let _rectDrawType = rectDrawType({samoPad, samoPadIns})
+        const _rectDrawType = rectDrawType({samoPad, samoPadIns})
         samoPadIns.injectDrawType(_rectDrawType)
+        const _arcDrawType = arcDrawType({samoPad, samoPadIns})
+        samoPadIns.injectDrawType(_arcDrawType)
+        const _polygonDrawType = polygonDrawType({samoPad, samoPadIns})
+        samoPadIns.injectDrawType(_polygonDrawType)
+        const _brushDrawType = brushDrawType({samoPad, samoPadIns})
+        samoPadIns.injectDrawType(_brushDrawType)
+        const _eraserDrawType = eraserDrawType({samoPad, samoPadIns})
+        samoPadIns.injectDrawType(_eraserDrawType)
+
         samoPadIns.setBackground({
             src: './singlebg.jpg'
+            // src: './splitbgs/1.jpg'
             // fillStyle: 'yellow'
+        }).then(res=>{
+            samoPadIns.setDrawsData(_mockDraws)
         })
         const _setRectBtn = document.getElementById('setRectBtn')
         _setRectBtn.addEventListener('click',(e)=>{
             samoPadIns?.setDrawType('rect')
+        })
+        const _setArcBtn = document.getElementById('setCircleBtn')
+        _setArcBtn.addEventListener('click',(e)=>{
+            samoPadIns?.setDrawType('arc', {
+                lineWidth: 1
+            })
+        })
+
+        const _setPolygonBtn = document.getElementById('setPolygonBtn')
+        _setPolygonBtn.addEventListener('click',(e)=>{
+            samoPadIns?.setDrawType('polygon', {
+                label: {
+                    content: 'polygon'
+                }
+            })
+        })
+        const _setBrushBtn = document.getElementById('setBrushBtn')
+        _setBrushBtn.addEventListener('click',(e)=>{
+            samoPadIns?.setDrawType('brush')
+        })
+        const _setEraserBtn = document.getElementById('setEraserBtn')
+        _setEraserBtn.addEventListener('click',(e)=>{
+            samoPadIns?.setDrawType('eraser')
         })
 
         const _preview = document.getElementById('preview')
         _preview.addEventListener('click',()=>{
             _preview.style.display='none'
         })
-        const _exportDD = document.getElementById('exportDD')
-        _exportDD.addEventListener('click',(e)=>{
-            samoPadIns?.exportPic({
+        const _exportPic = document.getElementById('exportPic')
+        _exportPic.addEventListener('click', async (e)=>{
+            const res = await samoPadIns?.exportPic({
                 // quality: 1,
                 // format: 'image/png',
                 // autoDownload: true,
@@ -150,12 +234,16 @@
                 //         type: 'image/png'
                 //     }
                 // }
-            }).then(res => {
-                if (res.data){
-                    _preview.src = res.data
-                    _preview.style.display='block'
-                }
             })
+            if (res.data){
+                _preview.src = res.data
+                _preview.style.display='block'
+            }
+        })
+        const _exportDD = document.getElementById('exportDD')
+        _exportDD.addEventListener('click', async (e)=>{
+            const _draws = samoPadIns?.exportDrawsData()
+            console.dir(_draws)
         })
     </script>
 </body>

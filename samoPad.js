@@ -536,7 +536,7 @@ export default class samoPad {
     });
   }
   // blob 转成文件
-  blobToFile(theBlob, fileName = 'exportPicture.png', options = { type: 'image/png' }) {
+  blobToFile(theBlob, fileName = 'export-picture.png', options = { type: 'image/png' }) {
     return new File([theBlob], fileName, options);
   }
   // base64 to blob数据
@@ -572,7 +572,7 @@ export default class samoPad {
         // width: this.sbDom.width,
         // height: this.sbDom.height,
         file: {
-          name: 'exportPicture.png',
+          name: 'export-picture.png',
           options: {
             type: 'image/png'
           }
@@ -590,8 +590,11 @@ export default class samoPad {
         _canvas.width = _width;
         _canvas.height = _height;
         const _canvasCtx = _canvas.getContext('2d');
-
-        this.renderDraws({ctx: _canvasCtx, zoomSize: 1})
+        this.setCtx(_canvasCtx)
+        _canvasCtx.save()
+        this.renderDraws({ctx: _canvasCtx})
+        const _fontSize = Math.ceil((this.singleBg?.width??this.wrap?.width??1)*16/1080)
+        this.renderLabels({ctx: _canvasCtx, zoomSize: 1, fontSize: _fontSize})
         this.renderBackground({ctx: _canvasCtx})
         _img = _canvas.toDataURL(_options.format, _options.quality);
         if (!_img) {
@@ -966,7 +969,7 @@ export default class samoPad {
       this.canvas.addEventListener('mouseout', this.pencilOutFn, false);
     }
   }
-  renderSingleDraw(ctx, obj, zoomSize) {
+  renderSingleDraw({ctx, obj}) {
     if (!obj) {
       return;
     }
@@ -985,7 +988,6 @@ export default class samoPad {
         ctx.stroke(_path2d)
         ctx.fill(_path2d)
         ctx.restore()
-        this.renderLabel({draw:obj, ctx, zoomSize})
         break;
       case 'arc':
         this.setCtx(ctx, obj)
@@ -999,7 +1001,6 @@ export default class samoPad {
         ctx.stroke(_path2d)
         ctx.fill(_path2d)
         ctx.restore()
-        this.renderLabel({draw:obj, ctx, zoomSize})
         break;
       case 'polygon':
         this.setCtx(ctx, obj)
@@ -1021,7 +1022,6 @@ export default class samoPad {
           ctx.fill(_path2d)
         }
         ctx.restore()
-        this.renderLabel({draw:obj, ctx, zoomSize})
         break;
       case 'eraser':
         this.setCtx(ctx, {
@@ -1108,13 +1108,14 @@ export default class samoPad {
         })
       }
     })
-    
+    let _peakGap = this.peakGap/this.zoomSize
+    _peakGap = _peakGap<=this.peakGap?this.peakGap:_peakGap;
     const _XList = _pointsList.map(val => val.x)
     const _YList = _pointsList.map(val => val.y)
-    const _minX = Math.min(..._XList) - this.peakGap;
-    const _maxX = Math.max(..._XList) + this.peakGap;
-    const _minY = Math.min(..._YList) - this.peakGap;
-    const _maxY = Math.max(..._YList) + this.peakGap;
+    const _minX = Math.min(..._XList) - _peakGap;
+    const _maxX = Math.max(..._XList) + _peakGap;
+    const _minY = Math.min(..._YList) - _peakGap;
+    const _maxY = Math.max(..._YList) + _peakGap;
     let _radius = 3/this.zoomSize
     _radius = _radius < 1 ? 1: _radius;
     this.peakRect = {
@@ -1853,7 +1854,7 @@ export default class samoPad {
     }
     if (this.draws && this.draws.length) {
       this.draws.forEach((val,index) => {
-        this.renderSingleDraw(ctx, val, zoomSize)
+        this.renderSingleDraw({ctx, obj:val, zoomSize})
       })
     }
   }
@@ -1932,7 +1933,7 @@ export default class samoPad {
   }
   renderTmpDraw() {
     if (this.tmpDraw) {
-      this.renderSingleDraw(this.ctx, this.tmpDraw)  
+      this.renderSingleDraw({ctx:this.ctx, obj:this.tmpDraw})  
     }
   }
   // 滚动缩放
@@ -1968,12 +1969,12 @@ export default class samoPad {
     // console.log('render peaks')
     this.generatePeaks(this.draws?.filter(val => val.selected && !val.lock))
     if (this.peakRect) {
-      this.renderSingleDraw(this.ctx, this.peakRect)
+      this.renderSingleDraw({ctx:this.ctx, obj:this.peakRect})
     }
 
     if (this.peaks && this.peaks.length) {
       this.peaks.forEach((val) => {
-        this.renderSingleDraw(this.ctx, val)
+        this.renderSingleDraw({ctx:this.ctx, obj:val})
       })
     }
   }
@@ -2020,11 +2021,19 @@ export default class samoPad {
     this.setCtx(this.ctx)
     this.ctx.save()
   }
+  renderLabels({ctx, zoomSize, fontSize}){
+    if (this.draws){
+      for (let item of this.draws){
+        this.renderLabel({ctx, draw: item, zoomSize, fontSize})
+      }
+    }
+    if (this.tmpDraw){
+      this.renderLabel({ctx, draw: this.tmpDraw})
+    }
+  }
   // 绘制标签
-  renderLabel({draw, zoomSize, ctx}={}) {
-    const { content, placement='tl', showInside=false, strokeStyle='#444', fillStyle='white', strokeText=true,
-      fontSize,
-    } = draw?.label ?? {}
+  renderLabel({draw, zoomSize, ctx, fontSize}={}) {
+    const { content, placement='tl', showInside=false, strokeStyle='#444', fillStyle='white', strokeText=true} = draw?.label ?? {}
     let _finalText = content && content.constructor === Array ? content.join(',') : content;
     
     if (_finalText === undefined) {
@@ -2037,8 +2046,12 @@ export default class samoPad {
     const _rectHeight = draw?.height??0
     const _rectX = draw?.x??0
     const _rectY = draw?.y??0
-
-    let _fontOriginSize = (fontSize??this.opts?.fontSize??15)/_zoomSize;
+    
+    const minFonSize=16;
+    let _fontOriginSize = fontSize ?? (this.opts?.fontSize ?? minFonSize)/_zoomSize
+    _fontOriginSize = _fontOriginSize <= minFonSize ? minFonSize : _fontOriginSize;
+    
+    
     let lineWidth = 5;
     let _padding = 4/_zoomSize;
     _padding = _padding < 1 ? 1 : _padding;
@@ -2051,26 +2064,23 @@ export default class samoPad {
       const _content = this.fittingString(_ctx, _finalText, _rectWidth-_padding*2)
       _fontWidth = _ctx.measureText(_content).width;
       _finalText = _content
-      _y = _rectY + _fontOriginSize ;
+      _y = _rectY + _fontOriginSize;
       _width = Math.min(...[_fontWidth, _rectWidth]);
       _x = _rectX + _rectWidth - _width - _padding;
         
       _outside = false;
     }
     if (_outside){
-      _y = _rectY - _padding*2;
+      _y = _rectY - Math.floor(_fontOriginSize/2);
       _x = _rectX;
     }
     if (placement === 'bl'){
       _y = _rectY + _fontOriginSize + _rectHeight;
     }
-    this.setCtx(this.ctx, {strokeStyle, fillStyle, lineWidth, font: `${_fontOriginSize}px ${this.opts?.fontFamily}`})
+    this.setCtx(_ctx, {strokeStyle, fillStyle, lineWidth, font: `${_fontOriginSize}px ${this.opts?.fontFamily}`})
     if (strokeText){
-      // this.setCtx(this.ctx, { lineWidth, font: `${_fontOriginSize}px ${this.opts?.fontFamily}`})
       _ctx.strokeText(_finalText, _x, _y)
-      // _ctx.restore()
     }
-    // this.setCtx(this.ctx, {strokeStyle, fillStyle, lineWidth, font: `${_fontOriginSize}px ${this.opts?.fontFamily}`})
     _ctx.fillText(_finalText, _x, _y);
     _ctx.restore()
   }
@@ -2202,8 +2212,9 @@ export default class samoPad {
   renderBoard(timeStamp) {
     this.clearStage(timeStamp)
     this.renderFocusMask()
-    this.renderDraws({ctx: this.ctx, zoomSize: this.zoomSize})
+    this.renderDraws({ctx: this.ctx})
     this.renderTmpDraw()
+    this.renderLabels({ctx: this.ctx})
     this.renderGuideLine()
     this.renderPeaks()
     // // this.renderRotatePoint()
