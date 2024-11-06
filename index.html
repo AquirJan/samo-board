@@ -41,7 +41,7 @@
             align-items: center;
             justify-items: center;
             padding: .3rem;
-            border-radius: 50%;
+            border-radius: 5px;
             transition: all 300ms;
         }
         .addon-btn:hover {
@@ -67,10 +67,12 @@
         .addon-list-item{
             user-select: none;
         }
-        .samo-board-wrap {
-            /* display: grid; */
-            /* width: 100%; */
-            /* border:1px solid #333; */
+        .preview {
+            display: block;
+            width: 100%;
+            position: fixed;
+            top:0;
+            left: 0;
         }
     </style>
 </head>
@@ -110,187 +112,51 @@
             </ul>
         </div>
         <div id="samoBoardWrap" class="samo-board-wrap"></div>
+        <img id="preview" class="preview" />
     </div>
     <script type="module">
-        import samoBoard from './samo-board.js'
+        import samoPad from './samoPad.js'
+        import rectDrawType from './rectDrawType.js'
         const _samoBoardWrap = document.getElementById('samoBoardWrap')
-        let _currentBgDegree = 0;
         // 自动加入父级容器
-        const sbIns = new samoBoard({
+        const samoPadIns = new samoPad({
             wrap: _samoBoardWrap
         })
-        let _hoverPoint = {
-            x: 0,
-            y: 0
-        }
-        let _draw = undefined;
-        let _leftPressing = false;
+        let _rectDrawType = rectDrawType({samoPad, samoPadIns})
+        samoPadIns.injectDrawType(_rectDrawType)
+        samoPadIns.setBackground({
+            src: './singlebg.jpg'
+            // fillStyle: 'yellow'
+        })
+        const _setRectBtn = document.getElementById('setRectBtn')
+        _setRectBtn.addEventListener('click',(e)=>{
+            samoPadIns?.setDrawType('rect')
+        })
 
-        let oldDraws = [
-            {"x":246,"y":314,"text":"","selected":true,"lock":false,"width":140,"height":102,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"blue","fillStyle":"rgba(34,54,98, .5)","lineWidth":1},
-            // {"x":146,"y":114,"text":"","selected":true,"lock":false,"width":140,"height":102,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"blue","fillStyle":"transparent","lineWidth":1},
-            {"id":"27be-4e4a99","x":274,"y":383,"text":"","selected":false,"lock":false,"width":86,"height":71,"radius":0,"startAngle":0,"endAngle":0,"ways":[],"type":"rect","drawType":"rect","rotate":0,"translate":[],"gco":"source-cover","strokeStyle":"green","fillStyle":"blue","lineWidth":1},
-        ]
-        sbIns.setDrawsData(oldDraws)
-        appendBackgoundAction()
-        
-        // sbIns.setStageDegree(90)
-        function setupJCRect() {
-            const upAndOutFn = function (e, {draws}) {
-                // console.log('up')
-                _leftPressing = false;
-                if (e.button === 0) {
-                    if (_draw) {
-                        if (_draw.width < 0) {
-                            _draw.x = _draw.x + _draw.width
-                            _draw.width = Math.abs(_draw.width)
-                        }
-                        if (_draw.height < 0) {
-                            _draw.y = _draw.y + _draw.height
-                            _draw.height = Math.abs(_draw.height)
-                        }
-                        if (_draw.width >= 10 || _draw.height >= 10) { // 限制最小尺寸
-                            _draw.strokeStyle = '#453'
-                            draws.push(samoBoard.cloneDeep(_draw))
-                            _draw = undefined;
-                            sbIns.setDrawsData(draws)
-                        }
-                    } else {
-                        // sbIns.selectDraw({
-                        //     // useStroke: true,
-                        //     single: true,
-                        //     pointX: _hoverPoint.x,
-                        //     pointY: _hoverPoint.y,
-                        // })
-                    }
-                } else if(e.button === 2) {
-                    if (sbIns.detectIsDBClick(e.timeStamp)) {
-                        sbIns.zoomReset();
-                    }
+        const _preview = document.getElementById('preview')
+        _preview.addEventListener('click',()=>{
+            _preview.style.display='none'
+        })
+        const _exportDD = document.getElementById('exportDD')
+        _exportDD.addEventListener('click',(e)=>{
+            samoPadIns?.exportPic({
+                // quality: 1,
+                // format: 'image/png',
+                // autoDownload: true,
+                file: null
+                // file: {
+                //     name: 'exportPicture.png',
+                //     options: {
+                //         type: 'image/png'
+                //     }
+                // }
+            }).then(res => {
+                if (res.data){
+                    _preview.src = res.data
+                    _preview.style.display='block'
                 }
-                
-            }
-            sbIns.customRender = function({ctx, draws}) {
-                // console.log(new Date())
-                // console.log(ctx)
-                // console.log(_draw)
-                if (_draw) {
-                    let _path2d = new Path2D();
-                    ctx.strokeStyle = _draw.strokeStyle
-                    _path2d.rect(_draw.x, _draw.y, _draw.width, _draw.height);
-                    ctx.fill(_path2d)
-                    ctx.stroke(_path2d)
-                }
-                // draws.forEach(val => {
-                //     val['strokeStyle'] = val.selected ? 'red' : 'blue'
-                // })
-            }
-            // 自定义画框类型
-            sbIns.setCustomDrawType({
-                type: 'jcrect',
-                downFn: (e, {draws, drawPrototype}) => {
-                    // console.log('down')
-                    draws = []
-                    // draws[0].strokeStyle = 'yellow'
-                    // console.log(e)
-                    if (e.button === 0) {
-                        _hoverPoint = {
-                            x: e.offsetX,
-                            y: e.offsetY
-                        }
-                        // console.log(JSON.stringify(_hoverPoint))
-                        // console.log(JSON.stringify(_draw))
-                        _leftPressing = true;
-                    }
-                },
-                moveFn: (e, {draws, drawPrototype, tmpDraw}) => {
-                    if (_leftPressing) {
-                        // console.log('move')
-                        // console.log(_hoverPoint)
-                        // console.log(e)
-                        if (!_draw ) {
-                            _draw = drawPrototype()
-                            _draw.x = _hoverPoint.x
-                            _draw.y = _hoverPoint.y
-                            _draw.strokeStyle = 'blue'
-                        } else {
-                            const _width = e.offsetX - _hoverPoint.x
-                            const _height = e.offsetY - _hoverPoint.y
-                            // console.log(_width, _height)
-                            _draw.width = _width
-                            _draw.height = _height
-                        }
-                    } else {
-                        
-                    }
-                },
-                outFn: upAndOutFn,
-                upFn: upAndOutFn,
-            }) 
-        }
-        async function appendBackgoundAction() {
-            // console.log(111111)
-            const _res0 = await sbIns.appendBackground({
-                src: './small.png',
-                // degree: 10,
-                // direction: 'horizontal'
-                // src: './small1.png',
-                // src: './singlebg.jpg'
             })
-            // console.log(_res0)
-            // const _res1 = await sbIns.appendBackground({
-            //     // src: './small.png',
-            //     src: './small1.png',
-            //     direction: 'horizontal'
-            //     // src: './singlebg.jpg'
-            // })
-            // console.log(_res1)
-            // const _res2 = await sbIns.appendBackground({
-            //     // src: './small.png',
-            //     src: './small1.png',
-            //     direction: 'horizontal'
-            //     // src: './singlebg.jpg'
-            // })
-            // console.log(_res2)
-        }
-        const exportDD = document.getElementById('exportDD')
-        exportDD.addEventListener('click', ()=>{
-            const _draws = sbIns.exportDrawsData()
-            console.log(JSON.stringify(_draws))
         })
-        const jcrect = document.getElementById('jcrect')
-        jcrect.addEventListener('click', setupJCRect)
-        const updatebgL = document.getElementById('updatebgL')
-        const updatebgR = document.getElementById('updatebgR')
-        const setRectBtn = document.getElementById('setRectBtn')
-        setRectBtn.addEventListener('click', ()=>{
-            sbIns.setDrawType('rect')
-        })
-        updatebgL.addEventListener('mousedown', ()=>{
-            // _currentBgDegree-=1
-            // sbIns.updateBackground({
-            //     degree: _currentBgDegree
-            // })
-            sbIns.setStageDegree(-180)
-        })
-        updatebgR.addEventListener('mousedown', ()=>{
-            // _currentBgDegree+=1
-            // sbIns.updateBackground({
-            //     degree: _currentBgDegree
-            // })
-            // sbIns.setStageDegree(90)
-            sbIns.setBackgroundDegree(90)
-        })
-        // jcrect.click()
-        // sbIns
-        // 手动指定加入某个dom
-        // const sbIns = new samoBoard({
-        //     autoAppend: false
-        // })
-        // sbIns.setCanvasStyle({width: _samoBoardWrap.clientWidth+'px', height: _samoBoardWrap.clientHeight+'px'})
-        // _samoBoardWrap.appendChild(sbIns.getCanvas())
-
-        // console.log(sbIns.getCanvas())
     </script>
 </body>
 </html>
