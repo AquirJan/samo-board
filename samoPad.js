@@ -974,12 +974,12 @@ export default class samoPad {
       return;
     }
     let _path2d = new Path2D();
-    
+    ctx.save()
     switch(obj.type) {
       case "rect":
         this.setCtx(ctx, obj)
         _path2d.rect(obj.x, obj.y, obj.width, obj.height);
-        if (obj.rotate !== undefined) {
+        if (obj.rotate) {
           const _center = this.findOutCenter(obj)
           ctx.translate(_center.x, _center.y)
           ctx.rotate(obj.rotate * Math.PI /180)
@@ -987,20 +987,18 @@ export default class samoPad {
         }
         ctx.stroke(_path2d)
         ctx.fill(_path2d)
-        ctx.restore()
         break;
       case 'arc':
         this.setCtx(ctx, obj)
         _path2d.arc(obj.x, obj.y, obj.radius, obj?.startAngle??0, obj?.endAngle??(2*Math.PI));
-        if (obj.rotate !== undefined) {
-          const _center = this.findOutCenter(obj)
-          ctx.translate(_center.x, _center.y)
+        if (obj.rotate) {
+          let _rotateCenter = obj.rotateCenter
+          ctx.translate(_rotateCenter?.x??0, _rotateCenter?.y??0)
           ctx.rotate(obj.rotate * Math.PI /180)
-          ctx.translate(-_center.x, -_center.y)
+          ctx.translate(-_rotateCenter?.x??0, -_rotateCenter?.y??0)
         }
         ctx.stroke(_path2d)
         ctx.fill(_path2d)
-        ctx.restore()
         break;
       case 'polygon':
         this.setCtx(ctx, obj)
@@ -1011,7 +1009,7 @@ export default class samoPad {
         if (obj.closed){
           _path2d.closePath()
         }
-        if (obj.rotate !== undefined) {
+        if (obj.rotate) {
           const _center = this.findOutCenter(obj)
           ctx.translate(_center.x, _center.y)
           ctx.rotate(obj.rotate * Math.PI /180)
@@ -1021,7 +1019,6 @@ export default class samoPad {
         if (obj.closed){
           ctx.fill(_path2d)
         }
-        ctx.restore()
         break;
       case 'eraser':
         this.setCtx(ctx, {
@@ -1032,7 +1029,6 @@ export default class samoPad {
         })
         ctx.lineWidth=obj?.lineWidth
         ctx.stroke(obj.path2d);
-        ctx.restore()
         break;
       case 'brush':
         this.setCtx(ctx, {
@@ -1043,10 +1039,10 @@ export default class samoPad {
         })
         ctx.lineWidth=obj?.lineWidth
         ctx.stroke(obj?.path2d);
-        ctx.restore()
+        
         break;
     }
-    
+    ctx.restore()
   }
   generatePeaks(draws) {
     this.peaks = []
@@ -1118,6 +1114,9 @@ export default class samoPad {
     const _maxY = Math.max(..._YList) + _peakGap;
     let _radius = 3/this.zoomSize
     _radius = _radius < 1 ? 1: _radius;
+
+    let _rotate = draws && draws.length === 1 ? draws[0].rotate : 0
+    
     this.peakRect = {
       type: 'rect',
       drawName: 'peakRect',
@@ -1130,9 +1129,12 @@ export default class samoPad {
       width: (_maxX-_minX),
       height: (_maxY-_minY),
       // gco: 'destination-over',
-      // rotate: draws && draws.length === 1 ? draws[0].rotate : 0,
+      rotate: _rotate,
     }
-    // console.log(this.peakRect)
+    let _arcRotateCenter = {
+      x: this.peakRect.x + this.peakRect.width/2,
+      y: this.peakRect.y + this.peakRect.height/2,
+    }
     let _arcBase = {
       type: 'arc',
       startAngle: 0,
@@ -1141,6 +1143,8 @@ export default class samoPad {
       fillStyle: '#ff8787',
       strokeStyle: '#83c3fb',
       endAngle: 2 * Math.PI,
+      rotate: _rotate,
+      rotateCenter: _arcRotateCenter
     }
     this.peaks = [
       // {
@@ -1151,6 +1155,7 @@ export default class samoPad {
       //   strokeStyle: '#83c3fb',
       //   x: this.peakRect.x + (this.peakRect.width/2),
       //   y: this.peakRect.y - (25/this.zoomSize),
+      //   rotate: _rotate,
       //   // lineDash: [8/this.zoomSize, 6/this.zoomSize],
       //   ways:[
       //     {
@@ -1159,16 +1164,17 @@ export default class samoPad {
       //     }
       //   ]
       // },
-      // {
-      //   ..._arcBase,
-      //   fillStyle: '#fff' ,
-      //   strokeStyle: '#333',
-      //   cursor: 'svgRotate',
-      //   code: 'all-rotate',
-      //   radius: 6/this.zoomSize,
-      //   x: this.peakRect.x + (this.peakRect.width/2),
-      //   y: this.peakRect.y - (25/this.zoomSize)
-      // },
+      {
+        ..._arcBase,
+        fillStyle: '#fff' ,
+        strokeStyle: '#333',
+        // cursor: 'svgRotate',
+        cursor: 'move',
+        code: 'all-rotate',
+        // radius: 6/this.zoomSize,
+        x: this.peakRect.x + (this.peakRect.width/2),
+        y: this.peakRect.y - (25/this.zoomSize)
+      },
       {
         ..._arcBase,
         cursor: 'nwse-resize',
@@ -1307,7 +1313,7 @@ export default class samoPad {
       y: 0
     }
     let _peaks = this.peaks || [];
-    if (draw && ['rect'].includes(draw.type)) {
+    if (draw && draw.width && draw.height) {
       _center = {
         x: draw.x+draw.width/2,
         y: draw.y+draw.height/2
@@ -1399,7 +1405,7 @@ export default class samoPad {
     let _angle = Math.atan2(y, x)  // 极坐标系
     let _degree = _angle*(180/Math.PI);
     _degree = -(_degree-90)
-    return _degree
+    return Number((_degree).toFixed(0))
   }
   // 单控制点调整尺寸
   revisionSize({x, y}) {
@@ -1543,7 +1549,7 @@ export default class samoPad {
             const _center = this.findOutCenter(this.peakRect)
             // console.log(`_center: ${JSON.stringify(_center)}`)
             this.currentRotateCenter = _center;
-            const _relativePoint = this.calculatePointRelative(_center, {x:this.hoverPoint.x-this.dragOffset.x, y:this.hoverPoint.y-this.dragOffset.y})
+            const _relativePoint = this.calculatePointRelative(_center, {x:(e.offsetX-this.dragOffset.x)/this.zoomSize, y:(e.offsetY-this.dragOffset.y)/this.zoomSize})
             // console.log(`this.hoverPoint: ${JSON.stringify(this.hoverPoint)}`)
             // console.log(`_relativePoint: ${JSON.stringify(_relativePoint)}`)
             const _degree = this.calculateDegree(_relativePoint)
@@ -1634,7 +1640,8 @@ export default class samoPad {
           lineWidth: 2,
         })
         const _cursor = new Path2D(this.svgCursors[this.currentCursor].path)
-        this.ctx.translate(this.hoverPoint.x-this.dragOffset.x-(this.svgCursors[this.currentCursor].offsetX/this.zoomSize), this.hoverPoint.y-this.dragOffset.y-(this.svgCursors[this.currentCursor].offsetY/this.zoomSize))
+        // this.ctx.translate(this.hoverPoint.x-this.dragOffset.x-this.svgCursors[this.currentCursor].offsetX, 0)
+        // this.ctx.translate(this.hoverPoint.x-this.dragOffset.x-(this.svgCursors[this.currentCursor].offsetX/this.zoomSize), this.hoverPoint.y-this.dragOffset.y-(this.svgCursors[this.currentCursor].offsetY/this.zoomSize))
         this.ctx.stroke(_cursor)
         this.ctx.fill(_cursor)
         this.ctx.restore()
@@ -1762,15 +1769,22 @@ export default class samoPad {
       // }
       if (this.peaks && this.peaks.length) {
         for (let i=(this.peaks.length-1);i>=0;i--) {
+          this.ctx.save()
           let val = this.peaks[i]
           const _path = new Path2D()
+          if (val.rotate){
+            let _rotateCenter = val.rotateCenter
+            this.ctx.translate(_rotateCenter?.x??0, _rotateCenter?.y??0)
+            this.ctx.rotate(val.rotate * Math.PI /180)
+            this.ctx.translate(-_rotateCenter?.x??0, -_rotateCenter?.y??0)
+          }
           _path.arc(val.x, val.y, val.radius+this.peakGap/this.zoomSize, 0, 2 * Math.PI);
           if (this.ctx.isPointInPath(_path, pointX, pointY)) {
             _cursor = val.cursor
             _peak = val;
-            // this.ctx.restore()
             break;
           }
+          this.ctx.restore()
         }
       }
       // if (_cursor === 'default') {
@@ -1791,6 +1805,7 @@ export default class samoPad {
       _draws = this.draws?.filter(item=>{
         if (!item.lock) {
           let _path = new Path2D()
+          this.ctx.save()
           switch(item.type){
             case 'rect':
               _path.rect(item.x, item.y, item.width, item.height);
@@ -1822,6 +1837,7 @@ export default class samoPad {
           if (_flag){
             return item
           }
+          this.ctx.restore()
         }
       })??[]
       // console.log(_draws)
@@ -2217,7 +2233,7 @@ export default class samoPad {
     this.renderLabels({ctx: this.ctx})
     this.renderGuideLine()
     this.renderPeaks()
-    // // this.renderRotatePoint()
+    this.renderRotatePoint()
     this.renderCursor()
     this.renderBackground({ctx: this.ctx})
 
