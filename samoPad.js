@@ -1852,7 +1852,7 @@ export default class samoPad {
         }
       }
       if (_useFirst){
-        _draw = _draws?.[0]
+        _draw = _draws?.pop()
       }
       // console.log(`_draw`, _draw)
       if (_draws.length) {
