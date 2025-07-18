@@ -8,7 +8,7 @@ export default function brushDrawType({samoPadIns, samoPad}={}){
         }
         let _downPoint = {x: 0, y:0}
         let _lBtnPressing = false
-        let _path2d = new Path2D()
+        
         let _zoomSizeObj = null
         let _dragOffset = null
         return {
@@ -30,6 +30,7 @@ export default function brushDrawType({samoPadIns, samoPad}={}){
               _zoomSizeObj = samoPadIns?.getZoomSize()
               let _x = (e.offsetX-_dragOffset.x)/_zoomSizeObj.current
               let _y = (e.offsetY-_dragOffset.y)/_zoomSizeObj.current
+              let _path2d = new Path2D()
               _path2d.moveTo(_x, _y)
               samoPadIns?.setTmpDraw({
                 type: 'brush',
@@ -50,6 +51,7 @@ export default function brushDrawType({samoPadIns, samoPad}={}){
               if (_lBtnPressing && _dragOffset && _zoomSizeObj) {
                 let _x = (e.offsetX-_dragOffset.x)/_zoomSizeObj.current
                 let _y = (e.offsetY-_dragOffset.y)/_zoomSizeObj.current
+                let _path2d = samoPadIns?.getTmpDraw()?.path2d
                 _path2d.lineTo(_x, _y)
               }
             }
@@ -63,12 +65,12 @@ export default function brushDrawType({samoPadIns, samoPad}={}){
               if (_lBtnPressing) {
                 _lBtnPressing = false;
                 let _tmpDraw = samoPadIns?.getTmpDraw()
-                console.log(_tmpDraw)
+                // console.log(_tmpDraw)
                 _tmpDraw.uuid = samoPad.generateUUID()
                 samoPadIns?.addDrawData(_tmpDraw)
               }
-              samoPadIns?.setDrawType('pointer')
               samoPadIns?.setTmpDraw(null)
+              // samoPadIns?.setDrawType('pointer')
             }
             if (_btnVal === 3){
               if (samoPadIns?.detectIsDBClick(e.timeStamp)) {

@@ -149,9 +149,40 @@
         import brushDrawType from './brushDrawType.js'
         import eraserDrawType from './eraserDrawType.js'
 
+        function ExpandRectangle(rect, scaleX, scaleY, returnType = 'xywh') {
+            // 解构原始矩形坐标 [x1, y1, x2, y2]
+            const [x1, y1, x2, y2] = rect;
+            
+            // 计算原始宽度和高度
+            const width = x2 - x1;
+            const height = y2 - y1;
+            
+            // 计算中心点坐标
+            const centerX = x1 + width / 2;
+            const centerY = y1 + height / 2;
+            
+            // 计算新宽度和高度（原尺寸的scale倍）
+            const newWidth = width * scaleX;
+            const newHeight = height * scaleY;
+            
+            // 计算新的左上和右下坐标
+            const nx1 = centerX - newWidth / 2;
+            const ny1 = centerY - newHeight / 2;
+            const nx2 = centerX + newWidth / 2;
+            const ny2 = centerY + newHeight / 2;
+            
+            // 返回新的矩形坐标
+            if (returnType === 'xywh'){
+            return [nx1, ny1, nx2 - nx1, ny2 - ny1];
+            } else {
+            return [nx1, ny1, nx2, ny2];
+            }
+        }
+
         
-        const _mockDraws = [
+        let _mockDraws = [
             {
+                uuid: '111',
                 type: 'arc',
                 x: 1100,
                 y: 800,
@@ -165,10 +196,11 @@
                 strokeStyle: '#333'
             },
             {
+                uuid: '222',
                 type: 'rect',
                 // rotate: 30,
-                x: 600,
-                y: 200,
+                x: 2100,
+                y: 400,
                 width: 200,
                 height: 200,
                 label:{
@@ -180,6 +212,7 @@
                 lineWidth: 2
             },
             {
+                uuid: '333',
                 type: 'rect',
                 x: 2200,
                 y: 400,
@@ -209,13 +242,56 @@
         samoPadIns.injectDrawType(_brushDrawType)
         const _eraserDrawType = eraserDrawType({samoPad, samoPadIns})
         samoPadIns.injectDrawType(_eraserDrawType)
-
+        const _st = Date.now()
         samoPadIns.setBackground({
-            src: './singlebg.jpg'
+            src: 'test2.png'
             // src: './splitbgs/1.jpg'
             // fillStyle: 'yellow'
         }).then(res=>{
+            console.log(`cost: ${Date.now()-_st}ms`)
+            _mockDraws = [
+                {
+                    "x": 1745,
+                    "y": 1517,
+                    "ways": [
+                        {
+                            "x": 2083,
+                            "y": 1593
+                        },
+                        {
+                            "x": 2128,
+                            "y": 1890
+                        },
+                        {
+                            "x": 1700,
+                            "y": 1900
+                        }
+                    ],
+                    "type": "polygon",
+                    "drawName": "polygon",
+                    "strokeStyle": "blue",
+                    "fillStyle": "red",
+                    "lineCap": "square",
+                    "lineJoin": "round",
+                    "lineWidth": 5,
+                    "label": {
+                        "content": "polygon"
+                    },
+                    "uuid": "f16e6f76-b935-4f8e-acc7-3994aefc5f6b",
+                    "closed": true,
+                    "selected": false
+                }
+            ]
+            // const _res = ExpandRectangle([
+            //     _mockDraws[0].x,
+            //     _mockDraws[0].y,
+            //     _mockDraws[0].x+_mockDraws[0].width,
+            //     _mockDraws[0].y+_mockDraws[0].height,
+            // ], 3, 3, 'ltrb')
+            // _mockDraws.push({"type":"rect","lineWidth":2,"lock":true,"strokeStyle":"green","x":_res[0],"y":_res[1],"width":_res[2]-_res[0],"height":_res[3]-_res[1]})
+            // console.dir(_mockDraws)
             samoPadIns.setDrawsData(_mockDraws)
+            // samoPadIns.setSelectedDraws(_mockDraws, 'move')
         })
         const _setRectBtn = document.getElementById('setRectBtn')
         _setRectBtn.addEventListener('click',(e)=>{

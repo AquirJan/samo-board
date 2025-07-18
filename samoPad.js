@@ -21,7 +21,9 @@ export default class samoPad {
   peakGap = 4;
   peaks = [];
   peakRect = undefined;
+  adjustType = 'all';
   mousePressing = false;
+  mouseMoving = false;
   currentPeak = undefined;
   lBtnPressing = false;
   rBtnPressing = false;
@@ -32,6 +34,7 @@ export default class samoPad {
   resizing = false;
   draws = [];
   singleBg = null
+  existBrushObj = null
   drawTypeList={}
   originSelectedDraws=undefined;
   
@@ -43,6 +46,9 @@ export default class samoPad {
   pencilOutFn = undefined;
   rotateStartPoint = undefined;
   windowResizeFn=undefined;
+  windowKeyDownFn=undefined;
+  windowKeyUpFn=undefined;
+  moveStep = 1
   svgCursors = {
     svgLocation: {
       path: 'M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12 ,2Z',
@@ -61,6 +67,7 @@ export default class samoPad {
     x: 0,
     y: 0
   }
+  drawChanged = false;
   tmpDraw = undefined;
   constructor(options={}) {
     this.opts = this.constructor.mergeDeep({
@@ -102,9 +109,12 @@ export default class samoPad {
   normalFloat(floatNumber = 0, fixed = 0) {
     return parseFloat(floatNumber.toFixed(fixed));
   }
+  setMoveStep(nv){
+    if (!isNaN(nv) || nv !== 0){
+      this.moveStep = nv;
+    }
+  }
   // 计算图片显示宽高
-  
-  
   calcImageSize(width, height) {
     let _obj = {
       viewWidth: 0,
@@ -272,8 +282,9 @@ export default class samoPad {
     });
   }
   recordHistoryChange(){
-    if (this.opts?.recordHistory){
+    if (this.opts?.recordHistory && this.drawChanged){
       this.historyRecordIns?.recordChange(this.constructor.cloneDeep(this.draws))
+      this.drawChanged = false
     }
   }
   // 历史记录操作,后退
@@ -316,7 +327,7 @@ export default class samoPad {
         this.wrap = this.opts.wrap;
       }
     }
-    console.log("初始化samo-board");
+    console.log("初始化samo-pad");
     this.canvas = document.createElement("canvas");
     this.ctx = this.canvas.getContext('2d');
     if (this.wrap) {
@@ -354,11 +365,11 @@ export default class samoPad {
       window.cancelAnimationFrame(this.animationFrameId)
       this.animationFrameId = null;
     }
-    // this.revokeGlobalKeyboard();
+    this.revokeKeysEvents();
     this.historyRecordIns?.destroy()
     this.canvas?.remove();
     this.canvas = null;
-    this.wrap?.remove();
+    // this.wrap?.remove();
     this.wrap = null;
     document.documentElement.style.cursor = 'default';
   }
@@ -432,23 +443,30 @@ export default class samoPad {
     this.resizeLogic()
   }
   bindKeysEvents() {
-    window.addEventListener('keydown', (e)=>this.windowKeyDown(e), false);
-    window.addEventListener('keyup', (e)=>this.windowKeyUp(e), false);
+    this.windowKeyDownFn = (e)=>this.windowKeyDown(e)
+    this.windowKeyUpFn = (e)=>this.windowKeyUp(e)
+    window.addEventListener('keydown', this.windowKeyDownFn, false);
+    window.addEventListener('keyup', this.windowKeyUpFn, false);
   }
   revokeKeysEvents() {
-    window.removeEventListener('keydown', this.windowKeyDown, false);
-    window.removeEventListener('keyup', this.windowKeyUp, false);
+    window.removeEventListener('keydown', this.windowKeyDownFn, false);
+    window.removeEventListener('keyup', this.windowKeyUpFn, false);
+    this.windowKeyDownFn = null;
+    this.windowKeyUpFn = null;
   }
   windowKeyDown(e) {
     // console.log(e)
     // console.log(e.keyCode)
     const _targetNodeName = e?.target?.nodeName
+    // console.log(_targetNodeName)
     if (!_targetNodeName?.match(/body/gi)){
       return;
     }
+    const _ctrlKey = e?.ctrlKey
     const _keyCode = e?.keyCode
-    const _stepDelta = e.shiftKey ? 10 : 1;
+    const _stepDelta = e.shiftKey ? 10*this.moveStep : this.moveStep;
     const _step = this.normalFloat(_stepDelta / this.zoomSize);
+    // console.log(_keyCode)
     switch(_keyCode) {
       case 32:
         if (!this.spacebarPressed) {
@@ -457,33 +475,37 @@ export default class samoPad {
         }
         break;
       case 37:
+      case 65:
         // 左
         this.draws.forEach(item=>{
-          if (item.selected && !item.lock){
+          if (item.selected){
             item.x -= _step
           }
         })
         break;
       case 39:
+      case 68:
         // 右
         this.draws.forEach(item=>{
-          if (item.selected && !item.lock){
+          if (item.selected){
             item.x += _step
           }
         })
         break;
       case 38:
+      case 87:
         // 上
         this.draws.forEach(item=>{
-          if (item.selected && !item.lock){
+          if (item.selected){
             item.y -= _step
           }
         })
         break;
       case 40:
+      case 83:
         // 下
         this.draws.forEach(item=>{
-          if (item.selected && !item.lock){
+          if (item.selected){
             item.y += _step
           }
         })
@@ -491,7 +513,27 @@ export default class samoPad {
       case 46:
         this.deleteDraws()
         break;
+      case 90:
+        if (_ctrlKey){
+          this.revoke()
+        }
+        break;
+      case 89:
+        if (_ctrlKey){
+          this.onward()
+        }
+        break;
     }
+    // console.log(this.draws)
+    this.canvas.dispatchEvent(
+      new CustomEvent('spKeyDown', {
+        bubbles: true,
+        detail: {
+          keycode: _keyCode,
+          selectedDraws: this.constructor.cloneDeep(this.draws?.filter(item=>item.selected)??[])
+        }
+      })
+    );
   }
   windowKeyUp(e) {
     // console.log(e.keyCode)
@@ -504,6 +546,16 @@ export default class samoPad {
         }
         break;
     }
+
+    // this.canvas.dispatchEvent(
+    //   new CustomEvent('spKeyUp', {
+    //     bubbles: true,
+    //     detail: {
+    //       keycode: _keyCode,
+    //       // draw: this.selectedDraw,
+    //     }
+    //   })
+    // );
   }
   setCtx(ctx, ctxStyle={}){
     if (!ctx) {
@@ -651,6 +703,9 @@ export default class samoPad {
   }
   getCanvas() {
     return this.canvas
+  }
+  isOutOfContainer(x, y, w, h, cw, ch) {
+    return (x | y | (cw - (x + w)) | (ch - (y + h))) < 0;
   }
   setGuideLine(options={}){
     this.opts.guideLine = {
@@ -833,15 +888,15 @@ export default class samoPad {
     }
   }
   // 检验是否双击
-  detectIsDBClick(ctime) {
-    this.clickTimeLogs.unshift(ctime);
+  detectIsDBClick(ctime, mousewhich=1) { // 默认鼠标左键
+    this.clickTimeLogs.unshift({mousewhich, ctime});
     if (this.clickTimeLogs.length > 2) {
-      this.clickTimeLogs = this.clickTimeLogs.slice(0, 2);
+      this.clickTimeLogs = this.clickTimeLogs?.filter(item=>item.mousewhich === mousewhich)?.slice(0, 2)??[];
     }
     if (this.clickTimeLogs.length !== 2) {
       return false;
     }
-    const _deltaTime = Math.abs(this.clickTimeLogs[0] - this.clickTimeLogs[1]);
+    const _deltaTime = Math.abs(this.clickTimeLogs[0].ctime - this.clickTimeLogs[1].ctime);
 
     if (_deltaTime <= 200) {
       return true;
@@ -849,39 +904,96 @@ export default class samoPad {
       return false;
     }
   }
-  dispatchDrawEvent({e, eventType}){
+  dispatchDrawEvent({e, eventType, transferData}){
     if (!eventType) {
       return;
     }
     let _selectedDraws = [];
-    if (eventType.match(/up/gi)){
-      _selectedDraws = this.constructor.cloneDeep(this.draws?.filter(item=>item.selected && !item.lock)??[])
+    let _overDraws = [];
+    if (eventType.match(/up|down/gi)){
+      _selectedDraws = this.constructor.cloneDeep(this.draws?.filter(item=>item.selected)??[])
+      _overDraws = this.detectOverSomething({
+        pointX: e.offsetX,
+        pointY: e.offsetY,
+        alsoDraws: true
+      })
     }
+    // console.log(e)
     this.canvas?.dispatchEvent(
       new CustomEvent(`${this.drawType}${eventType}`, {
         // bubbles: true,
         detail: {
+          which: e?.which ?? -1,
           selectedDraws: _selectedDraws,
+          overDraws: _overDraws?.draws??[],
           point: {
             x: e.offsetX,
             y: e.offsetY
-          }
+          },
+          transferData
         }
       })
     );
   }
   deleteDraws(draws){
-    console.log(`delete draw`)
     if (this.opts?.preventDeleteBtn){
       return;
     }
-    if (draws){
-      let _ids = draws?.map(item=>item.id)
-      this.draws = this.draws?.filter(item=>!_ids.includes(item.id))??[]
+    let _draws = draws
+    if (_draws){
+      let _ids = _draws?.map(item=>item.uuid)
+      this.draws = this.draws?.filter(item=>!_ids.includes(item.uuid))??[]
     } else {
+      _draws = this.draws?.filter(item=>item.selected)
       this.draws = this.draws?.filter(item=>!item.selected)??[]
     }
+    this.drawChanged = true;
     this.recordHistoryChange()
+    if (!draws){
+      this.canvas.dispatchEvent(
+        new CustomEvent('deleteDraw', {
+          bubbles: true,
+          detail: {
+            deletedDraws: _draws
+          }
+        })
+      );
+    }
+  }
+  // 设置选中框框
+  setSelectedDraws(data, adjustType="all"){
+    let _ids = data?.map(item=>item.uuid)??[]
+    if (_ids.length){
+      this.adjustType = adjustType  
+      this.draws.forEach(val => {
+        if (_ids.includes(val.uuid)){
+          val.selected = true;
+        } else {
+          val.selected = false;
+        }
+      })
+    } else {
+      this.adjustType = 'all'
+      this.draws.forEach(val => {
+        val.selected = false;
+      })
+    }
+    this.originSelectedDraws = this.constructor.cloneDeep(this.draws.filter(item=>item.selected))
+  }
+  // 获取当前背景数据
+  getBgObj() {
+    return this.singleBg;
+  }
+  unsetDrawType(){
+    this.drawType = null;
+    this.canvas.removeEventListener('mousedown', this.pencilDownFn, false);
+    this.canvas.removeEventListener('mousemove', this.pencilMoveFn, false);
+    this.canvas.removeEventListener('mouseup', this.pencilUpFn, false);
+    this.canvas.removeEventListener('mouseout', this.pencilOutFn, false);
+    this.pencilDownFn = null;
+    this.pencilMoveFn = null;
+    this.pencilUpFn = null;
+    this.pencilOutFn = null;
   }
   // 设置画图类型
   setDrawType(type='pointer', options={}) {
@@ -890,7 +1002,7 @@ export default class samoPad {
       val['selected'] = false;
     })
     
-    console.log(`setDrawType ---- ${type}`)
+    // console.log(`setDrawType ---- ${type}`)
     // document.documentElement.style.cursor = 'crosshair'
     // console.log(this.drawType)
     this.canvas.removeEventListener('mousedown', this.pencilDownFn, false);
@@ -906,8 +1018,8 @@ export default class samoPad {
       }
       if (_injectTypeObj.downFn) {
         this.pencilDownFn = (e) => {
-          _injectTypeObj.downFn(e, _params)
-          this.dispatchDrawEvent({e, eventType:'Down'})
+          let _transferData = _injectTypeObj.downFn(e, _params)
+          this.dispatchDrawEvent({e, eventType:'Down', transferData: _transferData})
         }
       }
       if (_injectTypeObj.moveFn) {
@@ -918,8 +1030,8 @@ export default class samoPad {
       }
       if (_injectTypeObj.upFn) {
         this.pencilUpFn = (e) => {
-          _injectTypeObj.upFn(e, _params)
-          this.dispatchDrawEvent({e, eventType:'Up'})
+          let _transferData = _injectTypeObj.upFn(e, _params)
+          this.dispatchDrawEvent({e, eventType:'Up', transferData: _transferData})
         }
       }
       if (_injectTypeObj.outFn) {
@@ -987,6 +1099,36 @@ export default class samoPad {
         }
         ctx.stroke(_path2d)
         ctx.fill(_path2d)
+
+        // 绘制方向 1:无 2:左 0:右 3:上 5:下
+        let directionList = [0, 6, 20, 21, 27, 57, 65, 70, 86, 95] //有方向的元器件类型
+        
+        if(obj.drawName==="pcb" && obj.testType==0 && obj.direction!=1 && directionList.indexOf(Number(obj.code))>-1){
+          ctx.fillStyle="red";
+          const originW = 4
+          let W = originW/this.zoomSize;  //方向线宽度
+          W = W <= originW ? originW : W
+          const _direction = obj.direction && obj.direction.constructor === String ? obj.direction : obj.direction?.toString()
+          switch (_direction){
+            // 左
+            case '2':
+              ctx.fillRect(obj.x, obj.y, W, obj.height);
+              break;
+            // 右
+            case '0':
+              ctx.fillRect(obj.x+obj.width-W, obj.y, W, obj.height);
+              break;
+            // 上
+            case '3':
+              ctx.fillRect(obj.x, obj.y, obj.width, W);
+              break;
+            // 下
+            case '5':
+              ctx.fillRect(obj.x, obj.y+obj.height-W, obj.width, W);
+              break;
+            default:;
+          }
+        }
         break;
       case 'arc':
         this.setCtx(ctx, obj)
@@ -1131,178 +1273,180 @@ export default class samoPad {
       // gco: 'destination-over',
       rotate: _rotate,
     }
-    let _arcRotateCenter = {
-      x: this.peakRect.x + this.peakRect.width/2,
-      y: this.peakRect.y + this.peakRect.height/2,
-    }
-    let _arcBase = {
-      type: 'arc',
-      startAngle: 0,
-      lineWidth: 6,
-      radius: _radius,
-      fillStyle: '#ff8787',
-      strokeStyle: '#83c3fb',
-      endAngle: 2 * Math.PI,
-      rotate: _rotate,
-      rotateCenter: _arcRotateCenter
-    }
-    this.peaks = [
-      // {
-      //   cursor: 'default',
-      //   code: 'tube',
-      //   type: 'polygon',
-      //   lineWidth: 2,
-      //   strokeStyle: '#83c3fb',
-      //   x: this.peakRect.x + (this.peakRect.width/2),
-      //   y: this.peakRect.y - (25/this.zoomSize),
-      //   rotate: _rotate,
-      //   // lineDash: [8/this.zoomSize, 6/this.zoomSize],
-      //   ways:[
-      //     {
-      //       x: this.peakRect.x + Math.floor(this.peakRect.width/2),
-      //       y: this.peakRect.y
-      //     }
-      //   ]
-      // },
-      {
-        ..._arcBase,
-        fillStyle: '#fff' ,
-        strokeStyle: '#333',
-        // cursor: 'svgRotate',
-        cursor: 'move',
-        code: 'all-rotate',
-        // radius: 6/this.zoomSize,
-        x: this.peakRect.x + (this.peakRect.width/2),
-        y: this.peakRect.y - (25/this.zoomSize)
-      },
-      {
-        ..._arcBase,
-        cursor: 'nwse-resize',
-        code: 'tl',
-        x: this.peakRect.x,
-        y: this.peakRect.y
-      },
-      // {
-      //   cursor: 'rotate',
-      //   code: 'tl-rotate',
-      //   startAngle: Math.PI/2,
-      //   endAngle: 2 * Math.PI,
-      //   radius: 3,
-      //   x: this.peakRect.x,
-      //   y: this.peakRect.y
-      // },
-      {
-        ..._arcBase,
-        cursor: 'nesw-resize',
-        code: 'tr',
-        x: this.peakRect.x + this.peakRect.width,
-        y: this.peakRect.y
-      },
-      // {
-      //   cursor: 'rotate',
-      //   code: 'tr-rotate',
-      //   startAngle: Math.PI * 3,
-      //   endAngle: 2.5 * Math.PI,
-      //   radius: 20,
-      //   x: this.peakRect.x+this.peakRect.width,
-      //   y: this.peakRect.y
-      // },
-      {
-        ..._arcBase,
-        cursor: 'nwse-resize',
-        code: 'br',
-        x: this.peakRect.x+this.peakRect.width,
-        y: this.peakRect.y+this.peakRect.height
-      },
-      // {
-      //   cursor: 'rotate',
-      //   code: 'br-rotate',
-      //   startAngle: Math.PI * 3.5,
-      //   endAngle: Math.PI * 5,
-      //   radius: 20,
-      //   x: this.peakRect.x+this.peakRect.width,
-      //   y: this.peakRect.y+this.peakRect.height
-      // },
-      {
-        ..._arcBase,
-        cursor: 'nesw-resize',
-        code: 'bl',
-        x: this.peakRect.x,
-        y: this.peakRect.y+this.peakRect.height
-      },
-      // {
-      //   cursor: 'rotate',
-      //   code: 'bl-rotate',
-      //   startAngle: Math.PI * 2,
-      //   endAngle: Math.PI * 3.5,
-      //   radius: 20,
-      //   x: this.peakRect.x,
-      //   y: this.peakRect.y+this.peakRect.height
-      // }
-    ]
-    let _limitSize = 50/this.zoomSize
-    if (draws.length === 1) {
-      if (draws[0].type === 'rect'){
-
-        if (this.peakRect.height >= _limitSize) {
-          this.peaks = this.peaks.concat([
-            {
-              ..._arcBase,
-              cursor: 'ew-resize',
-              code: 'rm',
-              x: this.peakRect.x+this.peakRect.width,
-              y: this.peakRect.y+Math.floor(this.peakRect.height/2),
-            },
-            {
-              ..._arcBase,
-              cursor: 'ew-resize',
-              code: 'lm',
-              x: this.peakRect.x,
-              y: this.peakRect.y+Math.floor(this.peakRect.height/2),
-            },
-          ])
-        }
-        if (this.peakRect.width >= _limitSize) {
-          this.peaks = this.peaks.concat([
-            {
-              ..._arcBase,
-              cursor: 'ns-resize',
-              code: 'tm',
-              x: this.peakRect.x + Math.floor(this.peakRect.width/2),
-              y: this.peakRect.y
-            },
-            {
-              ..._arcBase,
-              cursor: 'ns-resize',
-              code: 'bm',
-              x: this.peakRect.x+Math.floor(this.peakRect.width/2),
-              y: this.peakRect.y+this.peakRect.height,
-            }
-          ])
-        }
-      } else if (draws[0].type === 'arc'){
-        this.peaks = this.peaks?.filter(item=>item.code === 'br')
-        // this.peaks = [
-        //   {
-        //     ..._arcBase,
-        //     cursor: 'ew-resize',
-        //     code: 'rm',
-        //     x: this.peakRect.x+this.peakRect.width,
-        //     y: this.peakRect.y+Math.floor(this.peakRect.height/2),
-        //   }
-        // ]
-      } else if (draws[0].type === 'polygon'){
-        this.peakRect = null;
-        this.peaks = _pointsList?.map((item, index)=>{
-          return {
-            ..._arcBase,
-            code: 'pp',
-            waysIndex: item.waysIndex,
-            cursor: 'move',
-            x: item.x,
-            y: item.y
+    if (this.adjustType === 'all'){
+      let _arcRotateCenter = {
+        x: this.peakRect.x + this.peakRect.width/2,
+        y: this.peakRect.y + this.peakRect.height/2,
+      }
+      let _arcBase = {
+        type: 'arc',
+        startAngle: 0,
+        lineWidth: 6,
+        radius: _radius,
+        fillStyle: '#ff8787',
+        strokeStyle: '#83c3fb',
+        endAngle: 2 * Math.PI,
+        rotate: _rotate,
+        rotateCenter: _arcRotateCenter
+      }
+      this.peaks = [
+        // {
+        //   cursor: 'default',
+        //   code: 'tube',
+        //   type: 'polygon',
+        //   lineWidth: 2,
+        //   strokeStyle: '#83c3fb',
+        //   x: this.peakRect.x + (this.peakRect.width/2),
+        //   y: this.peakRect.y - (25/this.zoomSize),
+        //   rotate: _rotate,
+        //   // lineDash: [8/this.zoomSize, 6/this.zoomSize],
+        //   ways:[
+        //     {
+        //       x: this.peakRect.x + Math.floor(this.peakRect.width/2),
+        //       y: this.peakRect.y
+        //     }
+        //   ]
+        // },
+        // {
+        //   ..._arcBase,
+        //   fillStyle: '#fff' ,
+        //   strokeStyle: '#333',
+        //   // cursor: 'svgRotate',
+        //   cursor: 'move',
+        //   code: 'all-rotate',
+        //   // radius: 6/this.zoomSize,
+        //   x: this.peakRect.x + (this.peakRect.width/2),
+        //   y: this.peakRect.y - (25/this.zoomSize)
+        // },
+        {
+          ..._arcBase,
+          cursor: 'nwse-resize',
+          code: 'tl',
+          x: this.peakRect.x,
+          y: this.peakRect.y
+        },
+        // {
+        //   cursor: 'rotate',
+        //   code: 'tl-rotate',
+        //   startAngle: Math.PI/2,
+        //   endAngle: 2 * Math.PI,
+        //   radius: 3,
+        //   x: this.peakRect.x,
+        //   y: this.peakRect.y
+        // },
+        {
+          ..._arcBase,
+          cursor: 'nesw-resize',
+          code: 'tr',
+          x: this.peakRect.x + this.peakRect.width,
+          y: this.peakRect.y
+        },
+        // {
+        //   cursor: 'rotate',
+        //   code: 'tr-rotate',
+        //   startAngle: Math.PI * 3,
+        //   endAngle: 2.5 * Math.PI,
+        //   radius: 20,
+        //   x: this.peakRect.x+this.peakRect.width,
+        //   y: this.peakRect.y
+        // },
+        {
+          ..._arcBase,
+          cursor: 'nwse-resize',
+          code: 'br',
+          x: this.peakRect.x+this.peakRect.width,
+          y: this.peakRect.y+this.peakRect.height
+        },
+        // {
+        //   cursor: 'rotate',
+        //   code: 'br-rotate',
+        //   startAngle: Math.PI * 3.5,
+        //   endAngle: Math.PI * 5,
+        //   radius: 20,
+        //   x: this.peakRect.x+this.peakRect.width,
+        //   y: this.peakRect.y+this.peakRect.height
+        // },
+        {
+          ..._arcBase,
+          cursor: 'nesw-resize',
+          code: 'bl',
+          x: this.peakRect.x,
+          y: this.peakRect.y+this.peakRect.height
+        },
+        // {
+        //   cursor: 'rotate',
+        //   code: 'bl-rotate',
+        //   startAngle: Math.PI * 2,
+        //   endAngle: Math.PI * 3.5,
+        //   radius: 20,
+        //   x: this.peakRect.x,
+        //   y: this.peakRect.y+this.peakRect.height
+        // }
+      ]
+      let _limitSize = 50/this.zoomSize
+      if (draws.length === 1) {
+        if (draws[0].type === 'rect'){
+  
+          if (this.peakRect.height >= _limitSize) {
+            this.peaks = this.peaks.concat([
+              {
+                ..._arcBase,
+                cursor: 'ew-resize',
+                code: 'rm',
+                x: this.peakRect.x+this.peakRect.width,
+                y: this.peakRect.y+Math.floor(this.peakRect.height/2),
+              },
+              {
+                ..._arcBase,
+                cursor: 'ew-resize',
+                code: 'lm',
+                x: this.peakRect.x,
+                y: this.peakRect.y+Math.floor(this.peakRect.height/2),
+              },
+            ])
           }
-        })
+          if (this.peakRect.width >= _limitSize) {
+            this.peaks = this.peaks.concat([
+              {
+                ..._arcBase,
+                cursor: 'ns-resize',
+                code: 'tm',
+                x: this.peakRect.x + Math.floor(this.peakRect.width/2),
+                y: this.peakRect.y
+              },
+              {
+                ..._arcBase,
+                cursor: 'ns-resize',
+                code: 'bm',
+                x: this.peakRect.x+Math.floor(this.peakRect.width/2),
+                y: this.peakRect.y+this.peakRect.height,
+              }
+            ])
+          }
+        } else if (draws[0].type === 'arc'){
+          this.peaks = this.peaks?.filter(item=>item.code === 'br')
+          // this.peaks = [
+          //   {
+          //     ..._arcBase,
+          //     cursor: 'ew-resize',
+          //     code: 'rm',
+          //     x: this.peakRect.x+this.peakRect.width,
+          //     y: this.peakRect.y+Math.floor(this.peakRect.height/2),
+          //   }
+          // ]
+        } else if (draws[0].type === 'polygon'){
+          this.peakRect = null;
+          this.peaks = _pointsList?.map((item, index)=>{
+            return {
+              ..._arcBase,
+              code: 'pp',
+              waysIndex: item.waysIndex,
+              cursor: 'move',
+              x: item.x,
+              y: item.y
+            }
+          })
+        }
       }
     }
     return this.peaks
@@ -1352,7 +1496,7 @@ export default class samoPad {
       return _draw;
     }
     this.draws.forEach(_item => {
-      if (_item.selected && !_item.lock){
+      if (_item.selected){
         if (this.currentPeak) {
           switch (this.currentPeak.code) {
             case 'tm':
@@ -1495,51 +1639,120 @@ export default class samoPad {
   }
   // 指针状态事件
   pointerDownFn(e) {
+    // console.log(e)
+    const _ctrlKey = e?.ctrlKey
+    const _altKey = e?.altKey
     // e.which: 鼠标左键数值1，滚轮中键数值2，鼠标右键数值3
     const _btnVal = e?.which
     this.mousePressing = true;
     if (_btnVal === 1){
-      if (this.detectIsDBClick(e.timeStamp)) {
+      if (!_ctrlKey && !_altKey && this.detectIsDBClick(e.timeStamp)) {
         this.zoomAction({step: 0.8, animate: true});
         return;
       }
-      const {peak, draws, draw, cursor} = this.detectOverSomething({
+      const {peak, draws, draw, cursor, isOnPeakRect} = this.detectOverSomething({
         pointX: e.offsetX,
         pointY: e.offsetY,
         alsoDraws: true
       })
       this.currentCursor = cursor
       this.currentPeak = peak;
-      // console.log(peak, draw)
+      let _nv = null
+      
       if (!this.currentPeak){
-        this.draws.forEach(item=>{
-          item.selected = false;
-        })
-      }
-      if (draw) {
-        for (let item of this.draws){
-          if (item.uuid === draw.uuid){
-            item['selected'] = true;
-            break;
+        if (_ctrlKey){
+          const _uuids = this.draws?.filter(item=>item.selected)??[]
+          this.setSelectedDraws([...draws, ..._uuids])
+        } else {
+          let _oldSelectedDrawIds = this.draws?.filter(item=>item.selected)?.map(item=>item.uuid)??[]
+          this.draws.forEach(item=>{
+            item.selected = false;
+          })
+          if (draws && draws.length){
+            if (!_oldSelectedDrawIds.length || draws.length === 1){
+              _nv = draws[0]
+              this.setSelectedDraws([_nv])
+            } else {
+              if (_oldSelectedDrawIds.length === 1) {
+                if (_altKey){
+                  // 依次循环选择
+                  if (_oldSelectedDrawIds.length <= 0){
+                    _nv = draws[0]
+                  } else {
+                    _nv = draws.reduce((p, c, i)=>{
+                      if (_oldSelectedDrawIds.includes(c.uuid)){
+                        if (draws[i+1]){
+                          p = draws[i+1]
+                        } else {
+                          p = draws[0]  
+                        }
+                        return p
+                      } else {
+                        if (!_oldSelectedDrawIds.includes(c.uuid) && !p){
+                          p = c
+                        } 
+                        return p
+                      }
+                    }, null)
+                  }
+                } else {
+                  if (draws?.find(item=>_oldSelectedDrawIds.includes(item.uuid))){
+                    _nv = this.draws?.find(item=>_oldSelectedDrawIds.includes(item.uuid))
+                  } else {
+                    _nv =draws[0]
+                  }
+                }
+                if (_nv){
+                  this.setSelectedDraws([_nv])
+                }
+              }
+            }
           }
         }
-        this.originSelectedDraws = [this.constructor.cloneDeep(draw)]
       }
-      // console.log(this.peakRect)
-      this.dragDownPoint = {
-        x: e.offsetX,
-        y: e.offsetY
+      if (_nv){
+        this.generatePeaks([_nv])
+        // this.originSelectedDraws = this.constructor.cloneDeep([_nv])
+      }
+      if (this.peakRect || this.currentPeak){
+        if (this.currentPeak){
+          this.dragDownPoint = {
+            x: e.offsetX,
+            y: e.offsetY
+          }
+        } else if (this.peakRect) {
+          let _path = new Path2D()
+          _path.rect(this.peakRect.x, this.peakRect.y, this.peakRect.width, this.peakRect.height);
+          if (this.ctx.isPointInPath(_path, e.offsetX, e.offsetY)){
+            this.dragDownPoint = {
+              x: e.offsetX,
+              y: e.offsetY
+            }
+          } else {
+            this.dragDownPoint = {
+              x: 0,
+              y: 0
+            };
+          }
+        }
+      } else {
+        // polygon situation
+        this.dragDownPoint = {
+          x: e.offsetX,
+          y: e.offsetY
+        }
       }
     }
     if (_btnVal === 3){
       this.currentCursor = 'grabbing';
-        this.dragDown(e)
+      this.dragDown(e)
     }
   }
   pointerMoveFn(e) {
     const _btnVal = e?.which
     if (this.mousePressing){
       if (_btnVal === 1){
+        this.drawChanged = true;
         if (this.currentPeak){
           this.revisionSize({
             x: e.offsetX,
@@ -1556,17 +1769,17 @@ export default class samoPad {
             // console.log(_degree)
             this.peakRect.rotate = _degree
             this.draws.forEach(item=>{
-              if (item.selected && !item.lock){
+              if (item.selected){
                 item['rotate'] = _degree
               }
             })
           }
-        } else {
+        } else if (this.dragDownPoint){
           const _dx = e.offsetX - this.dragDownPoint.x
           const _dy = e.offsetY - this.dragDownPoint.y
           this.draws.forEach(item=>{
-            if (item.selected){
-              const _origin = this.originSelectedDraws?.find(oitem=>oitem.uuid === item.uuid)
+            const _origin = this.originSelectedDraws?.find(oitem=>oitem.uuid === item.uuid)
+            if (item.selected && _origin){
               if (item.type === 'polygon'){
                 item.x = _origin.x + _dx/this.zoomSize;
                 item.y = _origin.y + _dy/this.zoomSize;
@@ -1586,15 +1799,13 @@ export default class samoPad {
         // console.log(`鼠标右键`)
         this.dragMove(e)
       }
-      // console.log(`move--------------`)
-      // console.log(e?.which)
     } else {
       const {cursor, draw, draws} = this.detectOverSomething({
         pointX: e.offsetX,
         pointY: e.offsetY,
         alsoDraws: true,
       })
-      this.currentCursor = draw ? 'pointer' : cursor;
+      this.currentCursor = cursor;
     }
     
     this.hoverPoint = {
@@ -1602,7 +1813,7 @@ export default class samoPad {
       y: e.offsetY
     };
   }
-  pointerUpFn(e) {
+  pointerUpFn(e, params) {
     const _btnVal = e?.which
     // console.log(`up -----------`)
     this.mousePressing = false;
@@ -1612,20 +1823,81 @@ export default class samoPad {
       if (this.currentPeak){
         this.revisionDraws()
         this.currentPeak = null;
-        this.recordHistoryChange()
       }
-      this.originSelectedDraws = this.constructor.cloneDeep(this.draws.filter(item=>item.selected && !item.lock))
+      this.outContainerResetPosition()
+      this.recordHistoryChange()
+      this.originSelectedDraws = this.constructor.cloneDeep(this.draws.filter(item=>item.selected))
     }
     if (_btnVal === 3){
       // console.log(`鼠标右键`)
-      if (this.detectIsDBClick(e.timeStamp)) {
+      if (this.detectIsDBClick(e.timeStamp, 3)) {
         this.zoomReset({animate:true});
       } 
     }
   }
-  pointerOutFn(e) {
-    // this.pointerUpFn(e)
+  pointerOutFn(e, params) {
+    this.pointerUpFn(e, params)
     // this.dragUp(e)
+  }
+  outContainerResetPosition(){
+    const _corners = this.getBoundingCorners(this.draws.filter(item=>item.selected))
+    if (!_corners || !this.singleBg){
+      return;
+    }
+    const _isout = this.isOutOfContainer(_corners.x, _corners.y, _corners.width, _corners.height, this.singleBg.width, this.singleBg.height);
+    if (_isout){
+      let _deltaX = 0;
+      let _deltaY = 0;
+      if (_corners.tlx<0){
+        _deltaX = Math.abs(_corners.tlx);
+      }
+      if (_corners.brx>this.singleBg.width){
+        _deltaX = -(Math.abs(_corners.brx)-this.singleBg.width);
+      }
+      if (_corners.tly<0){
+        _deltaY = Math.abs(_corners.tly);
+      }
+      if (_corners.bry>this.singleBg.height){
+        _deltaY = -(Math.abs(_corners.bry)-this.singleBg.height);
+      }
+      this.draws.forEach(item=>{
+        if (item.selected){
+          item.x = item.x+_deltaX;
+          item.y = item.y+_deltaY;
+        }
+      })
+    }
+  }
+  getBoundingCorners(rects=[]) {
+    if (rects.length === 0) return null;
+    
+    // 初始化最小/最大值
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+    
+    // 遍历所有矩形，找出最小和最大的X/Y值
+    for (const rect of rects) {
+        minX = Math.min(minX, rect.x);
+        minY = Math.min(minY, rect.y);
+        maxX = Math.max(maxX, rect.x + rect.width);
+        maxY = Math.max(maxY, rect.y + rect.height);
+    }
+    
+    // 返回四个角的坐标
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      tlx: minX, 
+      tly: minY,    // 左上角
+      trx: maxX, 
+      try: minY,    // 右上角
+      brx: maxX, 
+      bry: maxY,    // 右下角
+      blx: minX, 
+      bly: maxY    // 左下角
+    } 
   }
   renderCursor() {
     // console.log(this.currentCursor)
@@ -1650,9 +1922,14 @@ export default class samoPad {
       }
     }
   }
-  addDrawData(draw){
+  addDrawData(draw, {prevInsert=false}={}){
     const _draw = this.revisionDraws(draw)
-    this.draws = [...this.draws, this.constructor.cloneDeep(_draw)]
+    if (prevInsert){
+      this.draws.unshift(this.constructor.cloneDeep(draw))
+    } else {
+      this.draws = [...this.draws, this.constructor.cloneDeep(_draw)]
+    }
+    this.drawChanged = true;
     this.recordHistoryChange()
   }
   setDrawsData(draws, record=false) {
@@ -1663,9 +1940,10 @@ export default class samoPad {
       }
       return item
     })??[]
-    this.originSelectedDraws = this.constructor.cloneDeep(this.draws?.filter(val=>val.selected && !val.lock)??[])
+    this.originSelectedDraws = this.constructor.cloneDeep(this.draws?.filter(val=>val.selected)??[])
     // this.this.ctx.aks(this.draws.filter(val=>val.selected));
     if (record){
+      this.drawChanged = true;
       this.recordHistoryChange()
     }
   }
@@ -1673,7 +1951,7 @@ export default class samoPad {
     if (!type){
       throw new Error(`miss type`);
     }
-    console.log(`injectDrawType----${type}`)
+    // console.log(`injectDrawType----${type}`)
     if (this.drawTypeList[type]){
       console.log(`type ${type}, already exists`)
       return {
@@ -1739,7 +2017,7 @@ export default class samoPad {
         drawName,
         gco,
         strokeStyle,
-        fillStyle
+        fillStyle,
       };
     }
     
@@ -1803,7 +2081,7 @@ export default class samoPad {
     if (!_peak && this.draws && this.draws.length && alsoDraws) {
       // console.log('draws')
       _draws = this.draws?.filter(item=>{
-        if (!item.lock) {
+        if (!item.lock || (item.selected && item.lock)) {
           let _path = new Path2D()
           this.ctx.save()
           switch(item.type){
@@ -1840,26 +2118,21 @@ export default class samoPad {
           this.ctx.restore()
         }
       })??[]
-      // console.log(_draws)
-      // 当选中的draw重叠其他，不改变当前选中draw
-      let _useFirst = true
-      if (this.originSelectedDraws?.length === 1){
-        const _cItem = this.originSelectedDraws?.[0]
-        const _isOverlap = !!_draws?.find(item=>item.uuid === _cItem.uuid)
-        if (_cItem && _isOverlap){
-          _draw = _cItem
-          _useFirst = false;
-        }
-      }
-      if (_useFirst){
-        _draw = _draws?.pop()
-      }
-      // console.log(`_draw`, _draw)
       if (_draws.length) {
         _cursor = 'move'
       }
     }
-    const _returnObj = {peak: _peak, cursor: _cursor, draw: _draw, draws: _draws, peakReck: _peakRect }
+
+    // 校验是否在peakrect上
+    let _isOnPeakRect = false;
+    // _peakRect = this.peakRect
+    // if (_peakRect){
+    //   const _peackRectPath = new Path2D()
+    //   _peackRectPath.rect(_peakRect.x, _peakRect.y, _peakRect.width, _peakRect.height) 
+    //   _isOnPeakRect = this.ctx.isPointInPath(_peackRectPath, pointX, pointY)
+    // }
+    
+    const _returnObj = {peak: _peak, cursor: _cursor, draw: _draw, draws: _draws, peakReck: _peakRect, isOnPeakRect: _isOnPeakRect }
     
     return _returnObj
   }
@@ -1983,7 +2256,7 @@ export default class samoPad {
   }
   renderPeaks(){
     // console.log('render peaks')
-    this.generatePeaks(this.draws?.filter(val => val.selected && !val.lock))
+    this.generatePeaks(this.draws?.filter(val => val.selected))
     if (this.peakRect) {
       this.renderSingleDraw({ctx:this.ctx, obj:this.peakRect})
     }
@@ -2225,8 +2498,73 @@ export default class samoPad {
   renderBgLoading(){
     this.setCtx(this.ctx, {gco: 'source-over'})
   }
+  // 设置已有笔刷图
+  async setExistBrushPic(obj) {
+    const _obj = {
+      src: '',
+      ...obj
+    }
+    if (_obj.src) {
+      this.existBrushObj = await this.asyncLoadImage(_obj.src, false);
+    } else {
+      this.existBrushObj = null;
+    }
+  }
+  renderExistBrushPic({ctx}){
+    // 添加已有brush
+    if (!ctx){
+      return;
+    }
+    if (this.existBrushObj && this.existBrushObj.success) {
+      ctx.drawImage(this.existBrushObj.data, 0, 0);
+    }
+  }
+  pickAoiBaseColor ({width, height, image}){
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (!image) {
+          resolve({message: `没有找到图像数据`});
+        }
+        const _image = await this.asyncLoadImage(image, false)
+        if (!_image.success){
+          return reject({message: `没有该图片`})
+        }
+        // console.log(_image)
+        const _canvas = document.createElement('canvas');
+        _canvas.width = width;
+        _canvas.height = height;
+        const _canvasCtx = _canvas.getContext('2d');
+        _canvasCtx.drawImage(_image.data, 0, 0);
+        const _imgData = _canvasCtx.getImageData(0, 0, _canvas.width, _canvas.height);
+        
+        let _outMaskColor=undefined
+        for (let i = 0; i < _imgData.data.length; i += 4) {  
+          if (_imgData.data[i+3] === 255 && !_outMaskColor) {
+            _outMaskColor = {
+              r: _imgData.data[i],
+              g: _imgData.data[i+1],
+              b: _imgData.data[i+2],
+              a: 255,
+            }
+            break;
+          }
+        }
+        return resolve({
+          outMaskColor: _outMaskColor,
+        });
+      } catch(error){
+        console.log(error)
+        return reject(error);
+      }
+    });
+  }
+  // 获取brush图层
+  getBrushObj(){
+    return this.existBrushObj;
+  }
   renderBoard(timeStamp) {
     this.clearStage(timeStamp)
+    this.renderExistBrushPic({ctx: this.ctx})
     this.renderFocusMask()
     this.renderDraws({ctx: this.ctx})
     this.renderTmpDraw()

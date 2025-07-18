@@ -8,7 +8,7 @@ export default function eraserDrawType({samoPadIns, samoPad}={}){
         }
         let _downPoint = {x: 0, y:0}
         let _lBtnPressing = false
-        let _path2d = new Path2D()
+        
         let _zoomSizeObj = null
         let _dragOffset = null
         return {
@@ -30,6 +30,7 @@ export default function eraserDrawType({samoPadIns, samoPad}={}){
               _zoomSizeObj = samoPadIns?.getZoomSize()
               let _x = (e.offsetX-_dragOffset.x)/_zoomSizeObj.current
               let _y = (e.offsetY-_dragOffset.y)/_zoomSizeObj.current
+              let _path2d = new Path2D()
               _path2d.moveTo(_x, _y)
               samoPadIns?.setTmpDraw({
                 type: 'eraser',
@@ -50,6 +51,7 @@ export default function eraserDrawType({samoPadIns, samoPad}={}){
               if (_lBtnPressing && _dragOffset && _zoomSizeObj) {
                 let _x = (e.offsetX-_dragOffset.x)/_zoomSizeObj.current
                 let _y = (e.offsetY-_dragOffset.y)/_zoomSizeObj.current
+                const _path2d = samoPadIns?.getTmpDraw()?.path2d;
                 _path2d.lineTo(_x, _y)
               }
             }

@@ -52,7 +52,7 @@ export default function polygonDrawType({samoPadIns, samoPad}={}){
           },
           upFn: (e, params) => {
             const _btnVal = e.which;
-            console.log(params)
+            // console.log(params)
             if (_btnVal === 1) {
               if (samoPadIns?.detectIsDBClick(e.timeStamp)) {
                 let _tmpDraw = samoPadIns?.getTmpDraw()
@@ -107,7 +107,7 @@ export default function polygonDrawType({samoPadIns, samoPad}={}){
                   // samoPadIns?.setTmpDraw(_tmpDraw, true)
                 }
               }
-              console.log(params)
+              // console.log(params)
             }
             if (_btnVal === 3){
               if (samoPadIns?.detectIsDBClick(e.timeStamp)) {

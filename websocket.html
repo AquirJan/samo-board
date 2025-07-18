@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <script>
+    let socket = new WebSocket("ws://localhost:5000/ws/");
+
+    socket.onopen = function(e) {
+      console.log("Connection established");
+      socket.send("open calculator");
+    };
+
+    socket.onmessage = function(event) {
+      console.log("Received from server: " + event.data);
+    };
+
+    socket.onclose = function(event) {
+      if (event.wasClean) {
+        console.log(`Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+      } else {
+        console.log('Connection died');
+      }
+    };
+
+    socket.onerror = function(error) {
+      console.log(`WebSocket error: ${error.message}`);
+    };
+
+    function sendToServer(message) {
+      socket.send(message);
+    }
+  </script>
+</body>
+</html>
